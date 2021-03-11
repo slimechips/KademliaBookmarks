@@ -1,0 +1,10 @@
+version: '3.4'
+
+services:
+  kademliabookmarks:
+    image: kademliabookmarks
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    ports:
+      - 3000-3004:1053/udp

@@ -4,7 +4,7 @@
 
 ### Docker-Compose
 
-Make sure you are in the project folder. To launch 5 instances
+Make sure you are in the project folder. Modify the number of replicas you want (default I set to 4) in the `replicas:` option in the `docker-compose.debug.yml`. Then run
 
 ```bash
 docker-compose -f "docker-compose.debug.yml" up -d --build

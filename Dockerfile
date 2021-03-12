@@ -11,12 +11,12 @@ ADD . /app
 ## We specify that we now wish to execute 
 ## any further commands inside our /app
 ## directory
-WORKDIR /app
+WORKDIR /app/udpp2p
 ## we run go build to compile the binary
 ## executable of our Go program
 RUN go build -o main .
 ## Our start command which kicks off
 ## our newly created binary executable
-CMD ["/app/main"]
+CMD ["/app/udpp2p/main"]
 LABEL Name=kademliabookmarks Version=0.0.1
 EXPOSE 1053/udp

@@ -4,6 +4,12 @@
 
 ### Docker-Compose
 
+First off I recommend deleting all existing containers.
+
+```
+docker-compose rm -f
+```
+
 Make sure you are in the project folder. Modify the number of replicas you want (default I set to 4) in the `replicas:` option in the `docker-compose.debug.yml`. Then run
 
 ```bash

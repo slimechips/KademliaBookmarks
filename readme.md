@@ -1,8 +1,10 @@
+# Kademlia Bookmarks
+
 ## Docker
 
 ### Docker-Compose
 
-To launch 5 instances
+Make sure you are in the project folder. To launch 5 instances
 
 ```bash
 docker-compose -f "docker-compose.debug.yml" up -d --build
@@ -25,6 +27,8 @@ docker exec -it <container-id> bash
 ### CLI Send UDP Packet
 
 #### DNS Method
+
+Containers are named `kademliaboomarks_node_<id>`. Starts from 1.
 
 e.g. Connect to UDP port `1053` for node 1.
 

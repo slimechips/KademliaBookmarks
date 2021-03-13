@@ -22,6 +22,7 @@ type Node struct {
 
 func contains(s []NodeAddr, e string) bool {
 	for _, a := range s {
+		fmt.Println(a.String(), e)
 		if a.String() == e {
 			return true
 		}
@@ -43,7 +44,7 @@ func ConvertToNodeAddr(addr string) NodeAddr {
 }
 
 func (node Node) String() string {
-	return fmt.Sprintf("[Node %d]: %s:%d", node.ID, node.IP.String(), node.Port)
+	return fmt.Sprintf("%s:%d", node.IP.String(), node.Port)
 }
 
 func (node Node) getAddr() string {
@@ -71,7 +72,7 @@ func (node *Node) StartListening() {
 		Port: node.Port,
 		IP:   node.IP,
 	}
-	fmt.Printf("[Node %d]:Started listening\n", node.ID)
+	fmt.Printf("%v-Started listening\n", node.String())
 	ser, err := net.ListenUDP("udp", &addr)
 	if err != nil {
 		fmt.Printf("Some error %v\n", err)
@@ -80,44 +81,41 @@ func (node *Node) StartListening() {
 	ser.SetReadBuffer(1048576)
 	for {
 		_, remoteaddr, err := ser.ReadFromUDP(p)
-		go node.HandleQuery(p, remoteaddr, err, ser)
-	}
-}
+		if strings.Contains(string(p), "!") {
+			s := strings.Split(string(p), "-")
 
-func (node *Node) HandleQuery(p []byte, remoteaddr *net.UDPAddr, err error, ser *net.UDPConn) {
-	if strings.Contains(string(p), "!") {
-		s := strings.Split(string(p), "-")
-
-		if contains(node.Peers, s[1]) {
-			fmt.Printf("Aded new peer in network\n")
-			node.Peers = append(node.Peers, ConvertToNodeAddr(remoteaddr.String()))
-		}
-	} else {
-		ad := remoteaddr.IP.String() + ":" + strconv.Itoa(remoteaddr.Port)
-		fmt.Printf("[Node %d]:Read a message from %v %s %v \n", node.ID, remoteaddr, p, ad)
-
-		if contains(node.Peers, ad) {
-			fmt.Printf("Aded new peer in network\n")
-			node.Peers = append(node.Peers, ConvertToNodeAddr(ad))
-		}
-		if err != nil {
-
-			fmt.Printf("Some error  %v\n", err)
-			return
-		}
-		go SendResponse("From [Node "+strconv.Itoa(node.ID)+"]: Hello I got your message \n", ser, remoteaddr)
-		for _, peer := range node.Peers {
-			conn, err := net.Dial("udp", peer.String())
+			if contains(node.Peers, s[1]) {
+				fmt.Printf("Added new peer in network\n")
+				node.Peers = append(node.Peers, ConvertToNodeAddr(remoteaddr.String()))
+			}
+			fmt.Println("Passed")
+		} else {
+			s := strings.Split(string(p), "-")
+			fmt.Printf("%v-Read a message from %v %s %v \n", node.String(), node.ID, remoteaddr, string(p))
+			if contains(node.Peers, s[0]) {
+				fmt.Printf("Aded new peer in network\n")
+				node.Peers = append(node.Peers, ConvertToNodeAddr(s[0]))
+			}
 			if err != nil {
-				fmt.Printf("Some error %v\n", err)
+
+				fmt.Printf("Some error  %v\n", err)
 				return
 			}
-			fmt.Printf("[Node %d]:[!]-"+peer.String()+"\n", node.ID)
-			fmt.Fprintf(conn, "[!]-"+peer.String())
-			conn.Close()
+			go SendResponse(node.String()+"-Hello I got your message \n", ser, remoteaddr)
+			for _, peer := range node.Peers {
+				conn, err := net.Dial("udp", peer.String())
+				if err != nil {
+					fmt.Printf("Some error %v\n", err)
+					return
+				}
+				fmt.Printf("[Node %d]:[!]-"+peer.String()+"\n", node.ID)
+				fmt.Fprintf(conn, "[!]-"+peer.String())
+				conn.Close()
+			}
 		}
 	}
 }
+
 func (node *Node) Contact(addr string) {
 	p := make([]byte, 2048)
 	conn, err := net.Dial("udp", addr)
@@ -126,8 +124,8 @@ func (node *Node) Contact(addr string) {
 		return
 	}
 	node.Peers = append(node.Peers, ConvertToNodeAddr(addr))
-	fmt.Printf("[Node %d]:Sending to %s\n", node.ID, addr)
-	fmt.Fprintf(conn, "[Node "+strconv.Itoa(node.ID)+"]: Hello, How are you doing?\n")
+	fmt.Printf("%s:Sending to %s\n", node.String(), addr)
+	fmt.Fprintf(conn, node.String()+"-Hello, How are you doing?\n")
 	_, err = bufio.NewReader(conn).Read(p)
 	if err == nil {
 		fmt.Printf("%s\n", p)
@@ -138,10 +136,10 @@ func (node *Node) Contact(addr string) {
 }
 
 func (node *Node) IStart() {
-	node.StartListening()
+	go node.StartListening()
 }
 
 func (node *Node) Start(addr string) {
-	node.Contact(addr)
-	node.StartListening()
+	go node.Contact(addr)
+	go node.StartListening()
 }

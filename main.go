@@ -1,23 +1,33 @@
 package main
 
 import (
-	"fmt"
-	"time"
+	"log"
+	"os"
+	"runtime"
 
 	N "./node"
 )
 
-func main() {
-	node0 := N.NewNode(0, "127.0.0.1")
-	node1 := N.NewNode(1, "127.0.0.2")
-	node2 := N.NewNode(2, "127.0.0.3")
-	go node0.IStart()
-	go node1.Start("127.0.0.1:1234")
-	go node2.Start("127.0.0.2:1234")
+const subnetStart = "172.16.238."
 
-	<-time.NewTimer(time.Duration(time.Second * 10)).C
-	fmt.Println(node0.Peers)
-	fmt.Println(node1.Peers)
-	fmt.Println(node2.Peers)
+func main() {
+
+	file, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.SetOutput(file)
+	log.Println("Log file started")
+	node0 := N.NewNode()
+	go node0.Start(subnetStart + "1")
+
+	runtime.Goexit()
+	log.Println("Exiting")
+
+	// <-time.NewTimer(time.Duration(time.Second * 10)).C
+	// fmt.Println(node0.Peers)
+	// fmt.Println(node1.Peers)
+	// fmt.Println(node2.Peers)
 
 }

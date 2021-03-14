@@ -22,6 +22,8 @@ To stop them
 docker-compose -f "docker-compose.debug.yml" down
 ```
 
+Note that the container names ARE NOT the same as the node id of the server running in the container. It is all based on IP Address.
+
 ### Connect to bash terminal in a container
 
 Get the `<container-id>` from inspect docker network
@@ -32,16 +34,6 @@ docker exec -it <container-id> bash
 
 ### CLI Send UDP Packet
 
-#### DNS Method
-
-Containers are named `kademliaboomarks_node_<id>`. Starts from 1.
-
-e.g. Connect to UDP port `1053` for node 1.
-
-```bash
-nc -u kademliabookmarks_node_1 1053
-```
-
 #### IP Address Method
 
 Network nodes are defined on `172.16.238.0/24`.
@@ -51,6 +43,14 @@ E.g. to connect to node on `172.16.238.2`
 ```bash
 nc -u 172.16.238.2 1053
 ```
+
+### View Logs for each Docker Container
+
+Vscode Docker Extension: Right click on container and `Attach Shell`
+
+CLI: `docker exec -it <FULL_CONTAINER_ID> sh`
+
+Then in the container's shell, `tail -f -n 1000 app.log`
 
 ### Docker Admin
 

@@ -3,33 +3,32 @@ package node
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
 )
 
-type NodeAddr struct {
-	IP   string
-	Port int
-}
-
 type Node struct {
 	ID    int
-	IP    string
+	IP    net.IP
 	Port  int
-	Peers []NodeAddr
+	Peers []Node // Only current node will have this
 }
 
-const Receiver_Port = 1234
+// Server listen port
+const RECEIVER_PORT = 1053
 
-func (node *Node) ContainsNode(e string) bool {
-	if node.String() == strings.TrimSpace(e) {
-		fmt.Printf("%s-it's me\n", node.String())
+/*
+Find out if node already exists, by ID
+*/
+func (node *Node) ContainsNode(id int) bool {
+	if node.ID == id {
+		log.Printf("%d-it's me\n", node.ID)
 		return true
 	} else {
 		for _, a := range node.Peers {
-			fmt.Println(a.String(), strings.TrimSpace(e))
-			if a.String() == e {
+			if a.ID == id {
 				return true
 			}
 		}
@@ -37,116 +36,184 @@ func (node *Node) ContainsNode(e string) bool {
 	return false
 }
 
-func SendResponse(msg string, conn *net.UDPConn, addr *net.UDPAddr) {
-	_, err := conn.WriteToUDP([]byte(msg), addr)
-	if err != nil {
-		fmt.Printf("Couldn't send response %v", err)
-	}
-}
-
-func ConvertToNodeAddr(addr string) NodeAddr {
-	s := strings.Split(strings.TrimSpace(addr), ":")
-	return NodeAddr{IP: s[0], Port: Receiver_Port}
-}
-
-func (node Node) String() string {
+func (node Node) FullAddr() string {
 	return fmt.Sprintf("%s:%d", node.IP, node.Port)
 }
 
-func (node Node) getAddr() string {
-	return node.IP + ":" + strconv.Itoa(node.Port)
-}
-
-func (nodeaddr NodeAddr) String() string {
-	return nodeaddr.IP + ":" + strconv.Itoa(nodeaddr.Port)
-}
-
-//newNode returns a new node
-func NewNode(id int, ip string) *Node {
-	return &Node{
+/*
+Initalise node based on system IP
+*/
+func NewNode() *Node {
+	ip := getIp()
+	id := getNodeName(ip)
+	node := &Node{
 		ID:    id,
 		IP:    ip,
-		Port:  Receiver_Port,
-		Peers: make([]NodeAddr, 0),
+		Port:  RECEIVER_PORT,
+		Peers: make([]Node, 0),
 	}
+	log.Println("Current Node Info:", *node)
+	return node
 }
 
 func (node *Node) StartListening() {
 	addr := net.UDPAddr{
 		Port: node.Port,
-		IP:   net.ParseIP(node.IP),
+		IP:   node.IP,
 	}
-	fmt.Printf("%v-Started listening\n", node.String())
+	log.Printf("%v-Started listening\n", node.FullAddr())
+	// Listen on localhost
 	ser, err := net.ListenUDP("udp", &addr)
 	if err != nil {
-		fmt.Printf("Some error %v\n", err)
+		log.Printf("Some error %v\n", err)
 		return
 	}
 	for {
+		// Byte array to hold message
 		p := make([]byte, 2048)
 		_, remoteaddr, err := ser.ReadFromUDP(p)
+
 		if err != nil {
 
-			fmt.Printf("Some error  %v\n", err)
+			log.Printf("Some error  %v\n", err)
 			return
 		}
-		if strings.Contains(string(p), "!") {
 
-			s := strings.Split(string(p), "-")
-			fmt.Println("Shared", s[0], s[1])
-			//fmt.Println([]byte(s[1]))
-			if !node.ContainsNode(s[1]) {
-				fmt.Printf("%s-Added new peer in network - %s\n", node.String(), s[1])
-				node.Peers = append(node.Peers, ConvertToNodeAddr(s[1]))
+		t := strings.Split(string(p), "|")
+		if len(t) < 3 {
+			log.Println("Error, received invalid message format")
+			continue
+		}
+		senderID, _ := strconv.Atoi(t[0])
+		tag := t[1]
+		recvMsg := t[2]
+		senderIp := remoteaddr.IP
+
+		switch tag {
+		case "AddPeer":
+			peerInfo := strings.Split(recvMsg, ";")
+			if len(peerInfo) < 2 {
+				log.Println("AddPeer format invalid")
+				continue
 			}
-			fmt.Println(s[1])
-		} else {
-			s := strings.Split(string(p), "-")
-			fmt.Printf("%v-Read a message from %v %s %v \n", node.String(), node.ID, remoteaddr, string(p))
-			if !node.ContainsNode(s[0]) {
-				fmt.Printf("%s-Added new peer in network - %s\n", node.String(), s[1])
-				node.Peers = append(node.Peers, ConvertToNodeAddr(s[0]))
-			}
-			go SendResponse(node.String()+"-Hello I got your message \n", ser, remoteaddr)
-			for _, peer := range node.Peers {
-				fmt.Printf("Sending to %s - %s\n", peer.String(), s[0])
-				conn, err := net.Dial("udp", peer.String())
-				if err != nil {
-					fmt.Printf("Some error %v\n", err)
-					return
-				}
-				fmt.Printf("%s>[!]-"+peer.String()+">%s\n", node.String(), s[0])
-				fmt.Fprintf(conn, "[!]-"+s[0])
-				conn.Close()
+			newPeerId, _ := strconv.Atoi(peerInfo[0])
+			newPeerIp := net.ParseIP(peerInfo[1])
+			log.Printf("Node %d-Recv Msg about NewPeer(Node id: %d, Ip: %s) from Node %d\n",
+				node.ID, newPeerId, newPeerIp, senderID)
+			node.tryAddtoNetwork(newPeerId, newPeerIp)
+		default: // e.g. hello
+			log.Printf("Node %d-Recv Msg from Node %d(%s): %s \n", node.ID, senderID, senderIp.String(), recvMsg)
+			if node.tryAddtoNetwork(senderID, senderIp) {
+				node.broadcastNewPeer(senderID, senderIp)
 			}
 		}
 	}
 }
 
-func (node *Node) Contact(addr string) {
+func (node *Node) tryAddtoNetwork(id int, ip net.IP) bool {
+	if !node.ContainsNode(id) {
+		log.Printf("Node %d-Added new peer in network. ID: %d, IP: %s\n", node.ID, id, ip)
+		node.Peers = append(node.Peers, Node{id, ip, RECEIVER_PORT, nil})
+		return true
+	}
+	return false
+}
+
+/*
+Send message to given address
+Port suffix is added automatically
+Message format: <NODE_ID>|<TAG>|<MSG>
+Tags: Hello, AddPeer
+*/
+func (node *Node) Send(addr string, tag string, rawMsg string) {
+	// Dont send to yourself
+	if node.IP.String() == addr {
+		return
+	}
+	addr = fmt.Sprintf("%s:%d", addr, RECEIVER_PORT)
 	p := make([]byte, 2048)
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
-		fmt.Printf("Some error %v", err)
+		log.Printf("Some error %v", err)
 		return
 	}
-	node.Peers = append(node.Peers, ConvertToNodeAddr(addr))
-	fmt.Printf("%s:Sending to %s\n", node.String(), addr)
-	fmt.Fprintf(conn, node.String()+"-Hello\n")
+
+	msg := fmt.Sprintf("%d|%s|%s|", node.ID, tag, rawMsg)
+	log.Printf("Node %d-Sending to %s:%s\n", node.ID, addr, msg)
+	fmt.Fprintf(conn, msg)
 	_, err = bufio.NewReader(conn).Read(p)
 	if err == nil {
-		fmt.Printf("%s\n", p)
+		log.Printf("%s\n", p)
 	} else {
-		fmt.Printf("Some error %v\n", err)
+		log.Printf("Some error %v\n", err)
 	}
 	conn.Close()
 }
 
+func (node *Node) SendResponse(msg string, conn *net.UDPConn, addr *net.UDPAddr) {
+	msg = fmt.Sprintf("%s|%s|", node.FullAddr(), msg)
+	_, err := conn.WriteToUDP([]byte(msg), addr)
+	if err != nil {
+		log.Printf("Couldn't send response %v", err)
+	}
+}
+
+/*
+Broadcast a new peer to existing peers you know
+*/
+func (node *Node) broadcastNewPeer(id int, ip net.IP) {
+	for _, peer := range node.Peers {
+		log.Printf("Node %d-Sending to %s - New Peer Id: %d New Peer Ip: %s\n",
+			node.ID, peer.FullAddr(), id, ip.String())
+
+		msg := fmt.Sprintf("%d;%s;", id, ip.String())
+		go node.Send(peer.IP.String(), "AddPeer", msg)
+	}
+}
+
+/*
+Get IP address of current node
+Works only in linux/docker
+*/
+func getIp() net.IP {
+	ifaces, _ := net.Interfaces()
+	for _, i := range ifaces {
+		if i.Name != "eth0" {
+			continue
+		}
+		addrs, _ := i.Addrs()
+		var ip net.IP
+		switch v := addrs[0].(type) {
+		case *net.IPAddr:
+			ip = v.IP
+		case *net.IPNet:
+			ip = v.IP
+		}
+		return ip
+	}
+	return nil
+}
+
+/*
+Determine node name from IP. Works only in docker
+*/
+func getNodeName(ip net.IP) int {
+	ipArr := strings.Split(ip.String(), ".")
+	nodeName, _ := strconv.Atoi(ipArr[3])
+	return nodeName
+}
+
+/*
+Start server only
+*/
 func (node *Node) IStart() {
 	go node.StartListening()
 }
 
+/*
+Start server and try to connect to some other host.
+*/
 func (node *Node) Start(addr string) {
-	go node.Contact(addr)
 	go node.StartListening()
+	go node.Send(addr, "Hello", "Hello")
 }

@@ -28,14 +28,6 @@ Or you can just right click on the containers tab in VSCode docker extension and
 
 Note that the container names ARE NOT the same as the node id of the server running in the container. It is all based on IP Address.
 
-### Connect to bash terminal in a container
-
-Get the `<container-id>` from inspect docker network
-
-```bash
-docker exec -it <container-id> bash
-```
-
 ### CLI Send UDP Packet
 
 #### IP Address Method

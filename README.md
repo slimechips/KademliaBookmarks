@@ -28,17 +28,6 @@ Or you can just right click on the containers tab in VSCode docker extension and
 
 Note that the container names ARE NOT the same as the node id of the server running in the container. It is all based on IP Address.
 
-### CLI Send UDP Packet
-
-#### IP Address Method
-
-Network nodes are defined on `172.16.238.0/24`.
-
-E.g. to connect to node on `172.16.238.2`
-
-```bash
-nc -u 172.16.238.2 1053
-```
 
 ### View Logs for each Docker Container
 
@@ -48,7 +37,17 @@ CLI: `docker exec -it <FULL_CONTAINER_ID> sh`
 
 Then in the container's shell, `tail -f -n 1000 app.log`
 
-### Docker Admin
+### Docker Admin (Just for testing purposes)
+
+### CLI Send UDP Packet (IP Address Method)
+
+Network nodes are defined on `172.16.238.0/24`.
+
+E.g. to connect to node on `172.16.238.2`
+
+```bash
+nc -u 172.16.238.2 1053
+```
 
 #### List Docker Networks
 

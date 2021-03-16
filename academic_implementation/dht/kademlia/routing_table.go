@@ -26,21 +26,21 @@ func NewRoutingTable() (ret *RoutingTable) {
 	return
 }
 
-func (n *node) Update(nodeCore *nodeCore) {
-	prefix_length := nodeCore.GUID.Xor(n.node_core.GUID).PrefixLen()
+func (n *node) Update(otherNodeCore *nodeCore) {
+	prefix_length := otherNodeCore.GUID.Xor(n.node_core.GUID).PrefixLen()
 
 	bucket := n.routing_table.Buckets[prefix_length]
 
 	var element *list.Element = nil
 	for e := bucket.Front(); e != nil; e = e.Next() {
-		if e.Value.(nodeCore).GUID.Equals((nodeCore).GUID) {
+		if e.Value.(nodeCore).GUID.Equals((otherNodeCore).GUID) {
 			element = e
 			break
 		}
 	}
 	if element == nil {
 		if bucket.Len() <= BucketSize {
-			bucket.PushFront(nodeCore)
+			bucket.PushFront(otherNodeCore)
 		}
 		// TODO: Handle insertion when the list is full by evicting old elements if
 		// they don't respond to a ping.

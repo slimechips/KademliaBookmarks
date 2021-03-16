@@ -2,36 +2,15 @@ package node
 
 import (
 	"bufio"
+	"container/list"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 )
-
-const K = 2
-const ID_LENGTH = 20
-const JOIN_MSG = "join"
-const LIST_MSG = "list"
-const PING_MSG = "ping"
-const STORE_MSG = "store"
-const FVALUE_MSG = "fValue"
-const FVALUEFAIL_MSG = "fValueF"
-const FNODE_MSG = "fNode"
-
-type ID [ID_LENGTH]byte
-
-type routingTable struct {
-	buckets [K][]*NodeCore
-}
-
-type Node struct {
-	node_core     NodeCore
-	routing_table routingTable
-	data          map[ID]string //stores a <key,value> pair for retrieval
-	alive         bool          //for unit testing during prototyping
-}
 
 type NodeCore struct {
 	node_ID ID
@@ -39,52 +18,95 @@ type NodeCore struct {
 	Port    int
 }
 
-// Server listen port
-const RECEIVER_PORT = 1053
-
-func (id ID) String() string {
-	return hex.EncodeToString(id)
-}
 func (node NodeCore) String() string {
-	return fmt.Sprintf("%d~%s~%d~;", node.ID.String(), node.IP.String(), node.Port)
+	return fmt.Sprintf("%d~%s~%d~;", node.node_ID.String(), node.IP.String(), node.Port)
 }
 
-/*
-Find out if node already exists, by ID
-*/
-func (node *Node) ContainsNode(id int) bool {
-	if node.ID == id {
-		log.Printf("%d-it's me\n", node.ID.String())
-		return true
-	} else {
-		for _, a := range node.Peers {
-			if a.ID == id {
-				return true
-			}
+type Node struct {
+	node_core     NodeCore
+	routing_table RoutingTable
+	data          map[ID]string //stores a <key,value> pair for retrieval
+	alive         bool          //for unit testing during prototyping
+}
+
+func (n *Node) Update(otherNodeCore *NodeCore) {
+	prefix_length := otherNodeCore.node_ID.Xor(n.node_core.node_ID).PrefixLen()
+
+	bucket := n.routing_table.Buckets[prefix_length]
+
+	var element *list.Element = nil
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		if e.Value.(NodeCore).node_ID.Equals((otherNodeCore).node_ID) {
+			element = e
+			break
 		}
 	}
-	return false
+	if element == nil {
+		if bucket.Len() <= BUCKET_SIZE {
+			bucket.PushFront(otherNodeCore)
+		}
+		// TODO: Handle insertion when the list is full by evicting old elements if
+		// they don't respond to a ping.
+
+	} else {
+		bucket.MoveToFront(element)
+	}
 }
 
 func (node Node) FullAddr() string {
-	return fmt.Sprintf("%s:%d", node.IP, node.Port)
+	return fmt.Sprintf("%s:%d", node.node_core.IP.String(), node.node_core.Port)
 }
 
-func createNodeCore(guid int, ip_address net.IP, udp_port int) *NodeCore {
-	n := NodeCore{ID: guid, IP: ip_address, Port: udp_port}
+func (n *Node) FindClosest(target ID, count int) (ret []NodeCore) {
+	records := n.FindClosestRecord(target, count)
+	for i := range records {
+		ret = append(ret, *records[i].Node)
+	}
+	return
+}
+
+func (n *Node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
+	bucket_num := target.Xor(n.node_core.node_ID).PrefixLen()
+	bucket := n.routing_table.Buckets[bucket_num]
+	copyToList(bucket, &ret, target)
+
+	// bidirectional search from the middle node
+	for i := 1; (bucket_num-i >= 0 || bucket_num+i < ID_LENGTH*8) && len(ret) < count; i++ {
+		if bucket_num-i >= 0 {
+			bucket = n.routing_table.Buckets[bucket_num-i]
+			copyToList(bucket, &ret, target)
+		}
+		if bucket_num+1 < ID_LENGTH*8 {
+			bucket = n.routing_table.Buckets[bucket_num+i]
+			copyToList(bucket, &ret, target)
+		}
+	}
+
+	sort.SliceStable(ret, func(i, j int) bool {
+		return ret[i].SortKey.Less(ret[j].SortKey)
+	})
+
+	// slice if somehow the list is longer than what is needed
+	if len(ret) > count {
+		ret = ret[:count]
+	}
+
+	return ret
+}
+
+func createNodeCore(guid ID, ip_address net.IP, udp_port int) *NodeCore {
+	n := NodeCore{node_ID: guid, IP: ip_address, Port: udp_port}
 	return &n
 }
 
-/*
-Initalise node based on system IP
-*/
+//NewNode initalise node based on system IP
 func NewNode(alive bool) *Node {
 	ip := getIp()
 	id := getNodeName(ip)
 	node := &Node{
 		node_core:     *createNodeCore(id, ip, RECEIVER_PORT),
-		routing_table: routingTable{buckets: make([K][]*NodeCore)},
-		data:          make(map[int]int),
+		routing_table: *NewRoutingTable(),
+		data:          make(map[ID]string),
 		alive:         alive,
 	}
 	log.Println("Current Node Info:", *node)
@@ -127,7 +149,7 @@ func (node *Node) StartListening() {
 			log.Println("Error, received invalid message format")
 			continue
 		}
-		senderID, _ := strconv.Atoi(t[0])
+		senderID := convertStringToID(t[0])
 		IP_address := net.ParseIP(t[1])
 		tag := t[2]
 		msgContent := t[3]
@@ -142,11 +164,11 @@ func (node *Node) StartListening() {
 			node.recvPing(ser, remoteAddr)
 		case STORE_MSG:
 			kv := strings.Split(msgContent, ";")
-			node.recvStore(StringToFixedByte(kv[0]), kv[1])
+			node.recvStore(convertStringToID(kv[0]), kv[1])
 		case FVALUE_MSG:
-			node.recvTryFindKeyValue(StringToFixedByte(msgContent), ser, remoteAddr)
+			node.recvTryFindKeyValue(convertStringToID(msgContent), ser, remoteAddr)
 		case FNODE_MSG:
-			node.recvFindNode(StringToFixedByte(msgContent), ser, remoteAddr)
+			node.recvFindNode(convertStringToID(msgContent), ser, remoteAddr)
 		// case "joinReq":
 		// 	peerInfo := strings.Split(recvMsg, ";")
 		// 	if len(peerInfo) < 2 {
@@ -167,30 +189,29 @@ func (node *Node) StartListening() {
 	}
 }
 
-func StringToFixedByte(s string) [ID_LENGTH]byte {
-	var arr [ID_LENGTH]byte
-	slice := []byte(s)
-	fmt.Println(slice[:])
-	copy(arr[:ID_LENGTH], slice[:])
-	return arr
+func convertStringToID(s string) ID {
+	i, _ := hex.DecodeString(s)
+	var id_string ID
+	copy(id_string[:ID_LENGTH], i)
+	return id_string
 }
 
 func convertStringToNodeCoreList(stringList []string) []*NodeCore {
 	nodecoreList := make([]*NodeCore, 0)
 	for _, s := range stringList {
 		s1 := strings.Split(s, "~")
-		ID, _ := strconv.Atoi(s1[0])
+		id := convertStringToID(s1[0])
 		Port, _ := strconv.Atoi(s1[2])
 		nodecoreList = append(nodecoreList,
-			createNodeCore(ID, net.ParseIP(s1[1]), Port))
+			createNodeCore(id, net.ParseIP(s1[1]), Port))
 	}
 	return nodecoreList
 }
 
 //recvJoinReq appends new nodecore to my routing table and send listRecv to this new nodecore
 func (node *Node) recvJoinReq(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPAddr) {
-	//TODO: XOR function & edit bucket num to convertKBucketToString
-	go node.SendResponse(LIST_MSG, convertKBucketToString(node.routing_table.buckets[nil]), conn, addr)
+	prefix_length := nodecore.node_ID.Xor(node.node_core.node_ID).PrefixLen()
+	go node.SendResponse(LIST_MSG, convertKBucketToString(node.routing_table.Buckets[prefix_length]), conn, addr)
 	node.Update(nodecore)
 }
 
@@ -205,17 +226,15 @@ func (node *Node) recvPing(conn *net.UDPConn, addr *net.UDPAddr) {
 	go node.SendResponse(PING_MSG, "hi", conn, addr)
 }
 
-func (node *Node) recvStore(key [ID_LENGTH]byte, value string) {
+func (node *Node) recvStore(key ID, value string) {
 	node.data[key] = value
 }
 
-func (node *Node) recvTryFindKeyValue(key [ID_LENGTH]byte, conn *net.UDPConn, addr *net.UDPAddr) {
+func (node *Node) recvTryFindKeyValue(key ID, conn *net.UDPConn, addr *net.UDPAddr) {
 	if val, ok := node.data[key]; ok {
 		go node.SendResponse(FVALUE_MSG, val, conn, addr)
 	} else {
-		//TODO: XOR function
-		nodeCores := node.FindClosest(K, key)
-		//TODO: getKClosestNodeCores
+		nodeCores := node.FindClosest(key, K)
 		s := ""
 		for _, nodeCore := range nodeCores {
 			s += nodeCore.String() + ";"
@@ -224,9 +243,8 @@ func (node *Node) recvTryFindKeyValue(key [ID_LENGTH]byte, conn *net.UDPConn, ad
 	}
 
 }
-func (node *Node) recvFindNode(key [ID_LENGTH]byte, conn *net.UDPConn, addr *net.UDPAddr) {
-	//TODO XOR
-	nodeCores := node.FindClosest(K, key)
+func (node *Node) recvFindNode(key ID, conn *net.UDPConn, addr *net.UDPAddr) {
+	nodeCores := node.FindClosest(key, K)
 	s := ""
 	for _, nodeCore := range nodeCores {
 		s += nodeCore.String() + ";"
@@ -235,19 +253,11 @@ func (node *Node) recvFindNode(key [ID_LENGTH]byte, conn *net.UDPConn, addr *net
 
 }
 
-func (node *Node) tryAddtoNetwork(id int, ip net.IP) bool {
-	if !node.ContainsNode(id) {
-		log.Printf("Node %d-Added new peer in network. ID: %d, IP: %s\n", node.ID.String(), id, ip)
-		node.Peers = append(node.Peers, Node{id, ip, RECEIVER_PORT, nil})
-		return true
-	}
-	return false
-}
-
-func convertKBucketToString(nodeCores []*NodeCore) string {
+func convertKBucketToString(bucket *list.List) string {
 	s := ""
-	for _, nodeCore := range nodeCores {
-		s += nodeCore.String()
+	for e := bucket.Front(); e != nil; e = e.Next() {
+		NodeCore := e.Value.(*NodeCore)
+		s += NodeCore.String()
 	}
 	return s
 }
@@ -269,11 +279,12 @@ func (node *Node) Send(nodeCore *NodeCore, tag string, rawMsg string) {
 		return
 	}
 
-	msg := fmt.Sprintf("%d|%s|%s|%s|", node.node_core.ID, node.node_core.IP.String(), tag, rawMsg)
-	log.Printf("Node %d->Sending to %s:%s\n", node.node_core.ID, addr, msg)
+	msg := fmt.Sprintf("%s|%s|%s|%s|", node.node_core.node_ID.String(), node.node_core.IP.String(), tag, rawMsg)
+	log.Printf("Node %d->Sending to %s:%s\n", node.node_core.node_ID, addr, msg)
 	fmt.Fprintf(conn, msg)
 	//waiting for response
 	_, err = bufio.NewReader(conn).Read(p)
+	ResponseMsgHandler(string(p))
 	if err == nil {
 		log.Printf("%s\n", p)
 	} else {
@@ -282,34 +293,50 @@ func (node *Node) Send(nodeCore *NodeCore, tag string, rawMsg string) {
 	conn.Close()
 }
 
-func SendMsgHandler(s string) string {
-	//1.alive
-	//2.recv value from finding key
-	//2.5 recv nodeCores from finding key (fail)
-	//3.recv nodeCore to store key
-	//
+func ResponseMsgHandler(s string) {
+	t := strings.Split(s, "|")
+	if len(t) < 4 {
+		//TODO: handle error better
+		log.Println("Error, received invalid message format")
+		return
+	}
+	//senderID := convertStringToID(t[0])
+	//IP_address := net.ParseIP(t[1])
+	tag := t[2]
+	msgContent := t[3]
+	switch tag {
+	case PING_MSG:
+		//TODO: pass (drop)
+	case FVALUE_MSG:
+		fmt.Println(msgContent)
+	case FVALUEFAIL_MSG:
+		//TODO: keep a list of nodes ive sent before & iterate through list of node cores FVALUE
+	case FNODE_MSG:
+		//TODO: send a STORE to the k closest to store the key-value
+	}
+
 }
 
 func (node *Node) SendResponse(tag string, rawMsg string, conn *net.UDPConn, addr *net.UDPAddr) {
-	msg := fmt.Sprintf("%d|%s|%s|%s|", node.node_core.ID, node.node_core.IP.String(), tag, rawMsg)
+	msg := fmt.Sprintf("%s|%s|%s|%s|", node.node_core.node_ID.String(), node.node_core.IP.String(), tag, rawMsg)
 	_, err := conn.WriteToUDP([]byte(msg), addr)
 	if err != nil {
 		log.Printf("Couldn't send response %v", err)
 	}
 }
 
-/*
-Broadcast a new peer to existing peers you know
-*/
-func (node *Node) broadcastNewPeer(id int, ip net.IP) {
-	for _, peer := range node.Peers {
-		log.Printf("Node %d-Sending to %s - New Peer Id: %d New Peer Ip: %s\n",
-			node.ID.String(), peer.FullAddr(), id, ip.String())
+// /*
+// Broadcast a new peer to existing peers you know
+// */
+// func (node *Node) broadcastNewPeer(id int, ip net.IP) {
+// 	for _, peer := range node.Peers {
+// 		log.Printf("Node %d-Sending to %s - New Peer Id: %d New Peer Ip: %s\n",
+// 			node.ID.String(), peer.FullAddr(), id, ip.String())
 
-		msg := fmt.Sprintf("%d;%s;", id, ip.String())
-		go node.Send(peer.IP.String(), "AddPeer", msg)
-	}
-}
+// 		msg := fmt.Sprintf("%d;%s;", id, ip.String())
+// 		go node.Send(peer.IP.String(), "AddPeer", msg)
+// 	}
+// }
 
 /*
 Get IP address of current node
@@ -337,10 +364,12 @@ func getIp() net.IP {
 /*
 Determine node name from IP. Works only in docker
 */
-func getNodeName(ip net.IP) int {
+func getNodeName(ip net.IP) ID {
 	ipArr := strings.Split(ip.String(), ".")
-	nodeName, _ := strconv.Atoi(ipArr[3])
-	return nodeName
+	b, _ := hex.DecodeString(ipArr[3])
+	var arr ID
+	copy(arr[:ID_LENGTH], b[:])
+	return arr
 }
 
 /*
@@ -353,6 +382,7 @@ func (node *Node) IStart() {
 /*
 Start server and try to connect to some other host.
 */
+//TODO: FIX FOR TEST CASES
 func (node *Node) Start(addr string) {
 	go node.StartListening()
 	go node.Send(addr, "Hello", "Hello")

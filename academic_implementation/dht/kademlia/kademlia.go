@@ -1,55 +1,60 @@
-package main
+package kademlia
 import "fmt"
 
+const (
+	k = 5
+)
 type nodeCore struct {
-	GUID int
+	GUID ID
 	ip_address int
 	udp_port int
 }
-
-type routingTable struct {
-	bucket0 []nodeCore
-	bucket1 []nodeCore
-}
+// type routingTable struct {
+// 	bucket0 []nodeCore
+// 	bucket1 []nodeCore
+// }
 
 type node struct{
 	node_core nodeCore
-	routing_table routingTable
-	data map[int] int	//stores a <key,value> pair for retrieval
+	routing_table RoutingTable
+	data map[ID] string	//stores a <key,value> pair for retrieval
 	alive bool	//for unit testing during prototyping
 }
 
-func createNodeCore(guid int, ip_address int, udp_port int) *nodeCore {
+func createNodeCore(guid ID, ip_address int, udp_port int) *nodeCore {
 	n := nodeCore{GUID:guid,ip_address:ip_address,udp_port:udp_port}
 	return &n
 }
 
-func createNode(guid int, ip_address int, udp_port int, alive bool) *node {
+func createNode(guid ID, ip_address int, udp_port int, alive bool) *node {
 	var node0 *nodeCore = createNodeCore(guid, ip_address, udp_port)
-	var rt0 routingTable = routingTable{bucket0:nil,bucket1:nil}
-	return &node{node_core:*node0,routing_table:rt0,alive:alive}
+	// var rt0 routingTable = routingTable{bucket0:nil,bucket1:nil}
+	var routing_table *RoutingTable = NewRoutingTable()
+	return &node{node_core:*node0,routing_table:*routing_table,alive:alive}
+}
+
+func joinBroadcastNode(joiningNode *node, broadcastNode *node) *node {
+	broadcastNode.Update(&joiningNode.node_core)
+	return broadcastNode
 }
 
 func reqBroadcastNode(joiningNode *node, broadcastNode *node) *node {
-	if len(broadcastNode.routing_table.bucket0)!=0{
-		for i:=0;i<len(broadcastNode.routing_table.bucket0);i++{
-			joiningNode.routing_table.bucket0 = append(joiningNode.routing_table.bucket0,broadcastNode.routing_table.bucket0[i])
+	joiningNode.Update(&broadcastNode.node_core)
+	for i:= range broadcastNode.routing_table.Buckets {
+		bucket := broadcastNode.routing_table.Buckets[i]
+		for e := bucket.Front(); e != nil; e = e.Next() {
+			joiningNode.Update(e.Value.(*nodeCore))
 		}
 	}
 	return joiningNode
 }
 
-func joinBroadcastNode(joiningNode *node, broadcastNode *node) *node {
-	broadcastNode.routing_table.bucket0 = append(broadcastNode.routing_table.bucket0,joiningNode.node_core)
-	return broadcastNode
-}
-
 //////////////////////////////////////////
 /*RPC for Kademlia *//////////////////////
 //////////////////////////////////////////
-func store(receipientNode *node, key int, value int) *node {
+func store(receipientNode *node, key ID, value string) *node {
 	if receipientNode.data == nil{
-		receipientNode.data =  make(map[int]int)
+		receipientNode.data =  make(map[ID]string)
 	}
 	receipientNode.data[key]=value
 	fmt.Println(receipientNode.data[key])
@@ -58,14 +63,19 @@ func store(receipientNode *node, key int, value int) *node {
 func ping(receipientNode *node) bool {
 	return receipientNode.alive
 }
-func findNode(receipientNode *node, key int)[]nodeCore{
-	return receipientNode.routing_table.bucket0
+func findNode(receipientNode *node, key ID)[]nodeCore{
+	result := receipientNode.FindClosest(key, k)
+	var out []nodeCore
+	for i := range result {
+		out = append(out, *result[i].Node)
+	}
+	return out
 }
-func findValue(receipientNode *node,key int)(int, bool, []nodeCore) {
+func findValue(receipientNode *node,key ID)(string, bool, []nodeCore) {
 	if _, ok := receipientNode.data[key]; ok {
 		return receipientNode.data[key],true,nil
 	}else{
-		return 0,false,findNode(receipientNode,key)
+		return "",false,findNode(receipientNode,key)
 	}
 }
 

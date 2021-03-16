@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+	"crypto/sha1"
 	"encoding/hex"
 	"math/rand"
 )
@@ -24,6 +25,15 @@ func NewRandomID() (ret ID) {
 	return
 }
 
+func NewSHA1ID(address string) (ret ID) {
+	h := sha1.New()
+	h.Write([]byte(address))
+	hashed := h.Sum(nil)
+	for i := 0; i < IdLength; i++ {
+		ret[i] = hashed[i]
+	}
+	return
+}
 func (id ID) String() string {
 	return hex.EncodeToString(id[0:IdLength])
 }

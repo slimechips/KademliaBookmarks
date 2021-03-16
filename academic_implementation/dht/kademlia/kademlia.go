@@ -57,19 +57,14 @@ func store(receipientNode *node, key ID, value string) *node {
 		receipientNode.data =  make(map[ID]string)
 	}
 	receipientNode.data[key]=value
-	fmt.Println(receipientNode.data[key])
+	// fmt.Println(receipientNode.data[key])
 	return receipientNode
 }
 func ping(receipientNode *node) bool {
 	return receipientNode.alive
 }
 func findNode(receipientNode *node, key ID)[]nodeCore{
-	result := receipientNode.FindClosest(key, k)
-	var out []nodeCore
-	for i := range result {
-		out = append(out, *result[i].Node)
-	}
-	return out
+	return receipientNode.FindClosest(key, k)
 }
 func findValue(receipientNode *node,key ID)(string, bool, []nodeCore) {
 	if _, ok := receipientNode.data[key]; ok {

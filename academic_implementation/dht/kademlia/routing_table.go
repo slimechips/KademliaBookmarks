@@ -57,7 +57,15 @@ func copyToList(bucket *list.List, list *[]nodeCoreRecord, target ID) {
 	}
 }
 
-func (n *node) FindClosest(target ID, count int) (ret []nodeCoreRecord) {
+func (n *node) FindClosest(target ID, count int) (ret []nodeCore){
+	records := n.FindClosestRecord(target, count)
+	for i := range records {
+		ret = append(ret, *records[i].Node)
+	}
+	return
+}
+
+func (n *node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
 	bucket_num := target.Xor(n.node_core.GUID).PrefixLen()
 	bucket := n.routing_table.Buckets[bucket_num]
 	copyToList(bucket, &ret, target)
@@ -82,5 +90,7 @@ func (n *node) FindClosest(target ID, count int) (ret []nodeCoreRecord) {
 	if len(ret) > count {
 		ret = ret[:count]
 	}
+
 	return ret
 }
+

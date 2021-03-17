@@ -10,7 +10,7 @@ services:
       - kademlia_net
     deploy:
       mode: replicated
-      replicas: 4
+      replicas: 8
 networks:
   kademlia_net:
     driver: bridge

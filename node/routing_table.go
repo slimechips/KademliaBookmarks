@@ -24,6 +24,6 @@ func NewRoutingTable() (ret *RoutingTable) {
 func copyToList(bucket *list.List, list *[]nodeCoreRecord, target ID) {
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		NodeCore := e.Value.(*NodeCore)
-		*list = append(*list, nodeCoreRecord{NodeCore, NodeCore.node_ID.Xor(target)})
+		*list = append(*list, nodeCoreRecord{NodeCore, NodeCore.GUID.Xor(target)})
 	}
 }

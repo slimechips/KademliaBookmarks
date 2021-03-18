@@ -146,7 +146,7 @@ func (node *Node) recvFindNode(key ID, conn *net.UDPConn, addr *net.UDPAddr) {
 		s += nodeCore.String()
 	}
 	log.Println("nodeCores all found:", s)
-	go node.SendResponse(FVALUEFAIL_MSG, s, conn, addr)
+	go node.SendResponse(FLOOKUP_MSG, s, conn, addr)
 }
 
 //KNodesLookUp returns K number of NodeCore for storage of target key
@@ -176,7 +176,7 @@ iterativeFind:
 			for _, n := range nodeCoreList {
 				if !StringsListContains(n.GUID.String(), requested) {
 					requested = append(requested, n.String())
-					go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
+					go node.Send(n, FLOOKUP_MSG, key.String(), chanFail, chanSucc)
 				}
 			}
 		case <-chanSucc:

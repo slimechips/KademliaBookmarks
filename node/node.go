@@ -11,28 +11,37 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
-type NodeCore struct {
-	GUID ID
-	IP   net.IP
-	Port int
-}
-
-func (node NodeCore) String() string {
-	return fmt.Sprintf("%s~%s~%d~;", node.GUID.String(), node.IP.String(), node.Port)
-}
-
+/*
+A Node complete with basic information (Node Core) and routing tables
+*/
 type Node struct {
-	NodeCore     NodeCore
-	RoutingTable RoutingTable
+	NodeCore     NodeCore      // Core Node info
+	RoutingTable RoutingTable  // Routing table of other nodes
 	Data         map[ID]string //stores a <key,value> pair for retrieval
 	Alive        bool          //for unit testing during prototyping
-	mutex        *sync.Mutex
 }
 
+//InitNode initalise node based on system IP
+func InitNode(alive bool) *Node {
+	ip := getIp()
+	id := getNodeName(ip)
+	node := &Node{
+		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
+		RoutingTable: *NewRoutingTable(),
+		Data:         make(map[ID]string),
+		Alive:        alive,
+	}
+	log.Println("Current Node Info:", *node)
+	return node
+}
+
+/*
+Update the routing table with a new node core
+Node core will be inserted into K-bucket corresponding to the Xor calculation
+*/
 func (n *Node) Update(otherNodeCore *NodeCore) {
 
 	prefix_length := otherNodeCore.GUID.Xor(n.NodeCore.GUID).PrefixLen()
@@ -46,7 +55,7 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 			break
 		}
 	}
-	n.mutex.Lock()
+	n.RoutingTable.Mutex.Lock()
 	if element == nil {
 		if bucket.Len() <= BUCKET_SIZE {
 			bucket.PushFront(otherNodeCore)
@@ -66,13 +75,19 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 	} else {
 		bucket.MoveToFront(element)
 	}
-	n.mutex.Unlock()
+	n.RoutingTable.Mutex.Unlock()
 }
 
+/*
+Print full address of node with IP and port info
+*/
 func (node Node) FullAddr() string {
 	return fmt.Sprintf("%s:%d", node.NodeCore.IP.String(), node.NodeCore.Port)
 }
 
+/*
+Find the closest K-Nodes
+*/
 func (n *Node) FindClosest(target ID, count int) (ret []NodeCore) {
 	records := n.FindClosestRecord(target, count)
 	for i := range records {
@@ -253,32 +268,10 @@ iterativeFind:
 /*
 format: <senderNodeID>|<IP_address>|<tag>|<msgContent>|
 Tags: join, list, ping, store, fValue, fNode
+optionally pass in channels to listen for the result
 */
 func (node *Node) Send(nodeCore *NodeCore, tag string, rawMsg string, opts ...chan string) {
-	// Dont send to yourself
-	if node.NodeCore.IP.String() == nodeCore.IP.String() {
-		return
-	}
-	addr := fmt.Sprintf("%s:%d", nodeCore.IP.String(), nodeCore.Port)
-	p := make([]byte, 2048)
-	conn, err := net.Dial("udp", addr)
-	if err != nil {
-		log.Printf("Some error %v", err)
-		return
-	}
-
-	msg := fmt.Sprintf("%s|%s|%s|%s|", node.NodeCore.GUID.String(), node.NodeCore.IP.String(), tag, rawMsg)
-	log.Printf("Node %d->Sending to %s ---->----- %s\n", node.NodeCore.GUID, addr, msg)
-	fmt.Fprintf(conn, msg)
-	//waiting for response
-	_, err = bufio.NewReader(conn).Read(p)
-	node.ResponseMsgHandler(fmt.Sprintf("~%s~%d~", nodeCore.IP.String(), nodeCore.Port), string(p), opts)
-	if err == nil {
-		log.Printf("%s\n", p)
-	} else {
-		log.Printf("Some error %v\n", err)
-	}
-	conn.Close()
+	node.AddrSend(nodeCore.IP.String(), tag, rawMsg, opts...)
 }
 
 /*
@@ -287,7 +280,7 @@ Port suffix is added automatically
 Message format: <NODE_ID>|<TAG>|<MSG>
 Tags: Hello, AddPeer
 */
-func (node *Node) AddrSend(addr string, tag string, rawMsg string) {
+func (node *Node) AddrSend(addr string, tag string, rawMsg string, opts ...chan string) {
 	// Dont send to yourself
 	if node.NodeCore.IP.String() == addr {
 		return
@@ -305,7 +298,8 @@ func (node *Node) AddrSend(addr string, tag string, rawMsg string) {
 	fmt.Fprintf(conn, msg)
 	_, err = bufio.NewReader(conn).Read(p)
 	ad := strings.Split(addr, ":")
-	node.ResponseMsgHandler(fmt.Sprintf("~%s~%s~", ad[0], ad[1]), string(p), nil)
+	// Response handle by message handler
+	node.ResponseMsgHandler(fmt.Sprintf("~%s~%s~", ad[0], ad[1]), string(p), opts...)
 	if err == nil {
 		log.Printf("%s\n", p)
 	} else {
@@ -313,6 +307,37 @@ func (node *Node) AddrSend(addr string, tag string, rawMsg string) {
 	}
 	conn.Close()
 }
+
+func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans ...chan string) {
+	t := strings.Split(s, "|")
+	if len(t) < 4 {
+		//TODO: handle error better
+		log.Println("Error, received invalid message format")
+		return
+	}
+	senderID := ConvertStringToID(t[0])
+	//IP_address := net.ParseIP(t[1])
+	tag := t[2]
+	msgContent := t[3]
+	log.Println("RESPONSE_HANDLER:", senderID, recvAddr, msgContent)
+	switch tag {
+	case PING_MSG:
+		//TODO: pass (drop)
+	case FVALUE_MSG:
+		chans[1] <- senderID.String() + recvAddr + "#" + msgContent
+		log.Println(msgContent)
+	case FVALUEFAIL_MSG:
+		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
+	case FLOOKUP_MSG:
+		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
+	case LIST_MSG:
+		if strings.Contains(msgContent, ";") {
+			nodeList := strings.Split(msgContent, ";")
+			go node.recvJoinListNodeCore(convertStringToNodeCoreList(nodeList))
+		}
+	}
+}
+
 func (node *Node) SendResponse(tag string, rawMsg string, conn *net.UDPConn, addr *net.UDPAddr) {
 	msg := fmt.Sprintf("%s|%s|%s|%s|", node.NodeCore.GUID.String(), node.NodeCore.IP.String(), tag, rawMsg)
 	log.Println("SENDING RESPONSE:", msg)
@@ -325,21 +350,6 @@ func (node *Node) SendResponse(tag string, rawMsg string, conn *net.UDPConn, add
 func createNodeCore(guid ID, ip_address net.IP, udp_port int) *NodeCore {
 	n := NodeCore{GUID: guid, IP: ip_address, Port: udp_port}
 	return &n
-}
-
-//NewNode initalise node based on system IP
-func NewNode(alive bool) *Node {
-	ip := getIp()
-	id := getNodeName(ip)
-	node := &Node{
-		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
-		RoutingTable: *NewRoutingTable(),
-		Data:         make(map[ID]string),
-		Alive:        alive,
-		mutex:        &sync.Mutex{},
-	}
-	log.Println("Current Node Info:", *node)
-	return node
 }
 
 func (node *Node) StartListening() {
@@ -450,36 +460,6 @@ func convertStringToNodeCoreList(stringList []string) []*NodeCore {
 			createNodeCore(id, net.ParseIP(s1[1]), Port))
 	}
 	return nodecoreList
-}
-
-func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans []chan string) {
-	t := strings.Split(s, "|")
-	if len(t) < 4 {
-		//TODO: handle error better
-		log.Println("Error, received invalid message format")
-		return
-	}
-	senderID := ConvertStringToID(t[0])
-	//IP_address := net.ParseIP(t[1])
-	tag := t[2]
-	msgContent := t[3]
-	log.Println("RESPONSE_HANDLER:", senderID, recvAddr, msgContent)
-	switch tag {
-	case PING_MSG:
-		//TODO: pass (drop)
-	case FVALUE_MSG:
-		chans[1] <- senderID.String() + recvAddr + "#" + msgContent
-		log.Println(msgContent)
-	case FVALUEFAIL_MSG:
-		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
-	case FLOOKUP_MSG:
-		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
-	case LIST_MSG:
-		if strings.Contains(msgContent, ";") {
-			nodeList := strings.Split(msgContent, ";")
-			go node.recvJoinListNodeCore(convertStringToNodeCoreList(nodeList))
-		}
-	}
 }
 
 // /*

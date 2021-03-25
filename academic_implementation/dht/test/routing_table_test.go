@@ -13,6 +13,7 @@ func TestRoutingTable(t *testing.T) {
 	n2 := kademlia.NewID("FFFFFFF000000000000000000000000000000000")
 	n3 := kademlia.NewID("1111111100000000000000000000000000000000")
 
+	// create new routing table for current node
 	rt := kademlia.NewRoutingTable(&kademlia.Contact{currentNode, "localhost:8000"})
 	rt.Update(&kademlia.Contact{n1, "localhost:8001"})
 	rt.Update(&kademlia.Contact{n2, "localhost:8002"})
@@ -49,4 +50,11 @@ func TestRoutingTable(t *testing.T) {
 	if !list[0].Node.Id.Equals(n4) {
 		t.Error(list[0])
 	}
+}
+
+func TestRoutingTableWithSHA1(t *testing.T) {
+	rt := kademlia.NewRoutingTable(kademlia.NewContact("localhost:8000"))
+	rt.Update(kademlia.NewContact("localhost:8001"))
+	rt.Update(kademlia.NewContact("localhost:8002"))
+	rt.Update(kademlia.NewContact("localhost:8003"))
 }

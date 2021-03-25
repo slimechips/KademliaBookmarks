@@ -1,23 +1,47 @@
 package main
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"runtime"
 	"time"
 
 	N "./node"
 )
 
-func main() {
-	node0 := N.NewNode(0, "127.0.0.1")
-	node1 := N.NewNode(1, "127.0.0.2")
-	node2 := N.NewNode(2, "127.0.0.3")
-	go node0.IStart()
-	go node1.Start("127.0.0.1:1234")
-	go node2.Start("127.0.0.2:1234")
+const subnetStart = "172.16.238."
 
-	<-time.NewTimer(time.Duration(time.Second * 10)).C
-	fmt.Println(node0.Peers)
-	fmt.Println(node1.Peers)
-	fmt.Println(node2.Peers)
+func main() {
+
+	file, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.SetOutput(file)
+	log.Println("Log file started")
+	node0 := N.NewNode(true)
+	go node0.Start(subnetStart + "1")
+	<-time.NewTimer(time.Duration(10) * time.Second).C
+
+	if node0.NodeCore.IP.String() == "172.16.238.1" {
+		log.Println("We're node 1. Starting test case by storing")
+		<-time.NewTimer(time.Duration(10) * time.Second).C
+		key := N.ConvertStringToID("123")
+		nodeCores := node0.KNodesLookUp(key)
+		log.Printf("Node Cores: %d\n", len(nodeCores))
+		node0.StoreInNodes(nodeCores, key, "Prof Sudipta rocks")
+		<-time.NewTimer(time.Duration(10) * time.Second).C
+		log.Println("Finding value by key now")
+		node0.FindValueByKey(key)
+	}
+
+	runtime.Goexit()
+	log.Println("Exiting")
+
+	// <-time.NewTimer(time.Duration(time.Second * 10)).C
+	// fmt.Println(node0.Peers)
+	// fmt.Println(node1.Peers)
+	// fmt.Println(node2.Peers)
 
 }

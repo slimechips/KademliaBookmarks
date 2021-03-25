@@ -20,7 +20,7 @@ func main() {
 
 	log.SetOutput(file)
 	log.Println("Log file started")
-	node0 := N.NewNode(true)
+	node0 := N.InitNode(true)
 	go node0.Start(subnetStart + "1")
 	<-time.NewTimer(time.Duration(10) * time.Second).C
 

@@ -16,3 +16,5 @@ const BUCKET_SIZE = 20
 // Server listen port
 const RECEIVER_PORT = 1053
 const TIMEOUT_DURATION = 2 * time.Second
+const REPLICATE_DURATION = 1 * time.Hour
+const REPUBLISHED_DURATION = 24 * time.Hour

@@ -2,14 +2,19 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	N "./node"
 )
 
 const subnetStart = "172.16.238."
+
+var router *gin.Engine
 
 func main() {
 
@@ -20,7 +25,7 @@ func main() {
 
 	log.SetOutput(file)
 	log.Println("Log file started")
-	node0 := N.InitNode(true)
+	node0 := N.NewNode(true)
 	go node0.Start(subnetStart + "1")
 	<-time.NewTimer(time.Duration(10) * time.Second).C
 
@@ -39,9 +44,33 @@ func main() {
 	runtime.Goexit()
 	log.Println("Exiting")
 
-	// <-time.NewTimer(time.Duration(time.Second * 10)).C
-	// fmt.Println(node0.Peers)
-	// fmt.Println(node1.Peers)
-	// fmt.Println(node2.Peers)
+	// Set the router as the default one provided by Gin
+	router = gin.Default()
+
+	// Process the templates at the start so that they don't have to be loaded
+	// from the disk again. This makes serving HTML pages very fast.
+	router.LoadHTMLGlob("templates/*")
+
+	// Define the route for the index page and display the index.html template
+	// To start with, we'll use an inline route handler. Later on, we'll create
+	// standalone functions that will be used as route handlers.
+	router.GET("/", func(c *gin.Context) {
+
+		// Call the HTML method of the Context to render a template
+		c.HTML(
+			// Set the HTTP status to 200 (OK)
+			http.StatusOK,
+			// Use the index.html template
+			"index.html",
+			// Pass the data that the page uses (in this case, 'title')
+			gin.H{
+				"title": "Home Page",
+			},
+		)
+
+	})
+
+	// Start serving the application
+	router.Run()
 
 }

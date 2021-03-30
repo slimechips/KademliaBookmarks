@@ -39,10 +39,6 @@ func main() {
 		log.Println("Finding value by key now")
 		node0.FindValueByKey(key)
 	}
-
-	runtime.Goexit()
-	log.Println("Exiting")
-
 	// Set the router as the default one provided by Gin
 	router = gin.Default()
 
@@ -70,6 +66,8 @@ func main() {
 	})
 
 	// Start serving the application
-	router.Run()
+	router.Run(":8080")
+	runtime.Goexit()
+	log.Println("Exiting")
 
 }

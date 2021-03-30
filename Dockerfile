@@ -23,4 +23,4 @@ RUN go build -o main .
 ## our newly created binary executable
 CMD ["/app/main"]
 LABEL Name=kademliabookmarks Version=0.0.1
-EXPOSE 1053/udp
+EXPOSE 1053/udp 8080

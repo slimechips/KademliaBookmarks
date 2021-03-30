@@ -15,10 +15,6 @@ import (
 	"time"
 )
 
-func (node NodeCore) String() string {
-	return fmt.Sprintf("%s~%s~%d~;", node.GUID.String(), node.IP.String(), node.Port)
-}
-
 type Node struct {
 	NodeCore     NodeCore
 	RoutingTable RoutingTable

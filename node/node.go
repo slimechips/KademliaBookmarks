@@ -42,13 +42,25 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 			bucket.PushFront(otherNodeCore)
 		} else {
 			// TODO: Handle insertion when the list is full by evicting old elements if
-
 			LRUNode := bucket.Back()
-			ping := true
+			pingOK := make(chan string)
+			ping := false
+			n.Send(LRUNode.Value.(*NodeCore), PING_MSG, "hi", pingOK)
+			timer := time.NewTimer(TIMEOUT_DURATION)
+		PingLoop:
+			for {
+				select {
+				case <-pingOK:
+					ping = true
+					break PingLoop
+				case <-timer.C:
+					ping = false
+					break PingLoop
+				}
+			}
 			if !ping {
 				// remove the LRUNode
 				bucket.Remove(LRUNode)
-
 				// add the new node to the front
 				bucket.PushFront(otherNodeCore)
 			}
@@ -456,7 +468,7 @@ func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans []chan str
 	log.Println("RESPONSE_HANDLER:", senderID, recvAddr, msgContent)
 	switch tag {
 	case PING_MSG:
-		//TODO: pass (drop)
+		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
 	case FVALUE_MSG:
 		chans[1] <- senderID.String() + recvAddr + "#" + msgContent
 		log.Println(msgContent)

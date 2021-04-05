@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -45,7 +44,7 @@ func (w WebServer) initializeRoutes() {
 		//home page
 		api.GET("/", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
-				"message": w.node.NodeCore.String(),
+				"hi": w.node.NodeCore.String(),
 			})
 		})
 		// readkey: get k-value of node's data
@@ -58,14 +57,15 @@ func (w WebServer) initializeRoutes() {
 					"Read Key": val})
 			} else {
 				c.JSON(http.StatusOK, gin.H{
-					"Read Key": "notfound:" + str})
+					"Read Key": "key not found:" + str})
 			}
 		})
 		// readkey: get k-value of node's data
-		api.POST("/readAllKey", func(c *gin.Context) {
+		api.GET("/readAll", func(c *gin.Context) {
+			log.Print("Trying to read all my data\n")
 			s := ""
 			for k, v := range w.node.Data {
-				s += fmt.Sprintf("%s:%s", k.String(), v)
+				s += fmt.Sprintf("%s:%s\n", k.String(), v)
 			}
 			c.JSON(http.StatusOK, gin.H{
 				"Read All Keys": s})
@@ -75,9 +75,9 @@ func (w WebServer) initializeRoutes() {
 			str := c.PostForm("searchkey")
 			key := ConvertStringToID(str)
 			log.Printf("searchValueByKey: %s\n", str)
-			w.node.FindValueByKey(key)
+			s := w.node.FindValueByKey(key)
 			c.JSON(http.StatusOK, gin.H{
-				"Search Value By Key": str})
+				"Search Value By Key": s})
 		})
 
 		// insert: lookup where to put key and send store to nodes for key
@@ -91,10 +91,22 @@ func (w WebServer) initializeRoutes() {
 			}
 			log.Printf("Storing at nodecores: %s\n", nodestr)
 			w.node.StoreInNodes(nodeCores, key, str)
-			<-time.NewTimer(time.Duration(10) * time.Second).C
 			c.JSON(http.StatusOK, gin.H{
-				"inserted value": str})
+				"inserted value": fmt.Sprintf("%s at %s", str, nodestr)})
 		})
+		// search: lookup key and return value (need to implement return of string in FindValueByKey)
+		api.GET("/readNeighbors", func(c *gin.Context) {
+			s := ""
+			for i := 0; i < ID_LENGTH*8; i++ {
+				for e := w.node.RoutingTable.Buckets[i].Front(); e != nil; e = e.Next() {
+					s += e.Value.(*NodeCore).String()
+				}
+			}
+			log.Printf("readNeighbors: %s\n", s)
+			c.JSON(http.StatusOK, gin.H{
+				"Search Value By Key": s})
+		})
+
 		//TODO: functions of api
 
 		// dont forget to cache titles of keys into personal

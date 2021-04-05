@@ -1,10 +1,25 @@
 <!--index.html-->
 
 <!--Embed the header.html template at this location-->
-{{ template "header.html" .}}
 <!-- TODO: Add components to access APIs in index page -->
-<label for="searchkey">Search:</label>
-<input type="text" id="searchkey" name="fname"><br><br>
+{{ template "header.html" .}}
+<form action="/api/readKey" method="post">
+    <label for="read-key">readkey:</label>
+    <input type="text" id="read-key" name="readkey">
+    <input type="submit">
+</form>
+
+<form action="/api/searchValueByKey" method="post">
+    <label for="search-key">searchkey:</label>
+    <input type="text" id="search-key" name="searchkey">
+    <input type="submit">
+</form>
+    
+<form action="/api/insert" method="post">
+    <label for="insert-val">insert:</label>
+    <input type="text" id="insert-val" name="insertval">
+    <input type="submit">
+</form>
  
 <!--Embed the footer.html template at this location-->
 {{ template "footer.html" .}}

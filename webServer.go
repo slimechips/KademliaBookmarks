@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,15 +15,18 @@ type WebServer struct {
 }
 
 func initServer(n *Node) *WebServer {
+	r := gin.Default()
+	r.Use(gin.Logger())
+	r.Use(gin.Recovery())
 	return &WebServer{
-		router: gin.Default(),
+		router: r,
 		node:   n,
 	}
 }
 func (w WebServer) initializeRoutes() {
 	// Handle the index route
 	w.router.GET("/", func(c *gin.Context) {
-
+		dataLinks := w.node.getData()
 		// Call the HTML method of the Context to render a template
 		c.HTML(
 			// Set the HTTP status to 200 (OK)
@@ -30,27 +35,70 @@ func (w WebServer) initializeRoutes() {
 			"index.html",
 			// Pass the data that the page uses (in this case, 'title')
 			gin.H{
-				"title": "Home Page",
+				"title":   "KademliaBM",
+				"payload": dataLinks,
 			},
 		)
 	})
 	api := w.router.Group("/api")
 	{
+		//home page
 		api.GET("/", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"message": w.node.NodeCore.String(),
 			})
 		})
-		//TODO: functions of api
 		// readkey: get k-value of node's data
-		// readall: get all k-values of nodes
+		api.POST("/readKey", func(c *gin.Context) {
+			str := c.PostForm("readkey")
+			key := ConvertStringToID(str)
+			log.Printf("readKeyyy: %s\n", str)
+			if val, ok := w.node.Data[key]; ok {
+				c.JSON(http.StatusOK, gin.H{
+					"Read Key": val})
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"Read Key": "notfound:" + str})
+			}
+		})
+		// readkey: get k-value of node's data
+		api.POST("/readAllKey", func(c *gin.Context) {
+			s := ""
+			for k, v := range w.node.Data {
+				s += fmt.Sprintf("%s:%s", k.String(), v)
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"Read All Keys": s})
+		})
+		// search: lookup key and return value (need to implement return of string in FindValueByKey)
+		api.POST("/searchValueByKey", func(c *gin.Context) {
+			str := c.PostForm("searchkey")
+			key := ConvertStringToID(str)
+			log.Printf("searchValueByKey: %s\n", str)
+			w.node.FindValueByKey(key)
+			c.JSON(http.StatusOK, gin.H{
+				"Search Value By Key": str})
+		})
+
 		// insert: lookup where to put key and send store to nodes for key
+		api.POST("/insert", func(c *gin.Context) {
+			str := c.PostForm("insertval")
+			key := ConvertStringToID(str)
+			nodeCores := w.node.KNodesLookUp(key)
+			nodestr := ""
+			for _, nc := range nodeCores {
+				nodestr += fmt.Sprintf("%s:%s\t", nc.GUID.String(), nc.IP.String())
+			}
+			log.Printf("Storing at nodecores: %s\n", nodestr)
+			w.node.StoreInNodes(nodeCores, key, str)
+			<-time.NewTimer(time.Duration(10) * time.Second).C
+			c.JSON(http.StatusOK, gin.H{
+				"inserted value": str})
+		})
+		//TODO: functions of api
+
 		// dont forget to cache titles of keys into personal
-		// search: lookup key and return value
-		// v1.GET("read/:key", GetKeyinData)
-		// v1.GET("readAll", GetData)
-		// v1.POST("insert/:key", InsertKey)
-		// v1.GET("search/:key", SearchKey)
+
 	}
 
 }
@@ -61,17 +109,3 @@ func (w WebServer) runWebServer(port int) {
 	w.initializeRoutes()
 	w.router.Run(fmt.Sprintf(":%d", port))
 }
-
-// func GetKeyinData(c *gin.Context) {
-// 	key := c.Params.ByName("key")
-
-// 	if n.Data[key] {
-// 		c.JSON(http.StatusOK, n.Data[key])
-// 	}
-
-// 	if err != nil {
-// 		c.AbortWithStatus(http.StatusNotFound)
-// 	} else {
-// 		c.JSON(http.StatusOK, todo)
-// 	}
-// }

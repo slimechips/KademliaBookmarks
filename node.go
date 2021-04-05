@@ -16,11 +16,19 @@ import (
 )
 
 type Node struct {
-	NodeCore     NodeCore
-	RoutingTable RoutingTable
-	Data         map[ID]string //stores a <key,value> pair for retrieval
-	Alive        bool          //for unit testing during prototyping
+	NodeCore     NodeCore      `json:"nodecore"`
+	RoutingTable RoutingTable  `json:"routingtable"`
+	Data         map[ID]string `json:"data"`  //stores a <key,value> pair for retrieval
+	Alive        bool          `json:"alive"` //for unit testing during prototyping
 	mutex        *sync.Mutex
+}
+
+func (n *Node) getData() []string {
+	temp := make([]string, 0)
+	for _, v := range n.Data {
+		temp = append(temp, v)
+	}
+	return temp
 }
 
 func (n *Node) Update(otherNodeCore *NodeCore) {

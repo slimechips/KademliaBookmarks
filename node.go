@@ -20,9 +20,18 @@ type Node struct {
 	RoutingTable RoutingTable
 	Data         map[ID]string //stores a <key,value> pair for retrieval
 	Alive        bool          //for unit testing during prototyping
+	Publish      chan bool
 	mutex        *sync.Mutex
 }
 
+func (n *Node) Republish() {
+	for key, value := range n.Data {
+		// check if you are supposed to republish
+		// assume it is supposed to store
+		nodeCores := node0.KNodesLookUp(key)
+		n.StoreInNodes(nodeCores, key, value)
+	}
+}
 func (n *Node) Update(otherNodeCore *NodeCore) {
 
 	prefix_length := otherNodeCore.GUID.Xor(n.NodeCore.GUID).PrefixLen()
@@ -337,6 +346,7 @@ func NewNode(alive bool) *Node {
 		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
 		RoutingTable: *NewRoutingTable(),
 		Data:         make(map[ID]string),
+		Publish:      make(chan bool),
 		Alive:        alive,
 		mutex:        &sync.Mutex{},
 	}
@@ -403,6 +413,10 @@ func (node *Node) StartListening() {
 			// if node.tryAddtoNetwork(senderID, senderIp) {
 			// 	node.broadcastNewPeer(senderID, senderIp)
 			// }
+		}
+		select {
+		case <-node.Publish:
+			node.Republish()
 		}
 	}
 }

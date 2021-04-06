@@ -48,10 +48,11 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 	}
 	n.mutex.Lock()
 	if element == nil {
-		if bucket.Len() <= BUCKET_SIZE {
+		if bucket.Len() <= K {
 			bucket.PushFront(otherNodeCore)
 		} else {
 			// TODO: Handle insertion when the list is full by evicting old elements if
+			log.Println(bucket)
 			LRUNode := bucket.Back()
 			pingOK := make(chan string)
 			ping := false
@@ -79,6 +80,14 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 		bucket.MoveToFront(element)
 	}
 	n.mutex.Unlock()
+}
+
+func (n *Node) getData() []string {
+	temp := make([]string, 0)
+	for _, v := range n.Data {
+		temp = append(temp, v)
+	}
+	return temp
 }
 
 func (node Node) FullAddr() string {
@@ -227,10 +236,10 @@ func (node *Node) StoreInNodes(nodeCores []*NodeCore, key ID, val string) {
 }
 
 //FindValueByKey sends request to Nodes for target key-value
-func (node *Node) FindValueByKey(key ID) {
+func (node *Node) FindValueByKey(key ID) string {
 	if val, ok := node.Data[key]; ok {
 		log.Println(val)
-		return
+		return val
 	}
 	chanSucc := make(chan string)
 	chanFail := make(chan string)
@@ -256,10 +265,11 @@ iterativeFind:
 					requested = append(requested, n.String())
 				}
 			}
-		case <-chanSucc:
-			break iterativeFind
+		case msg := <-chanSucc:
+			return strings.Split(msg, "#")[1]
 		}
 	}
+	return "value not found"
 }
 
 /*

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const subnetStart = "172.16.238."
+const subnetStart = "10.0.0."
 
 func main() {
 

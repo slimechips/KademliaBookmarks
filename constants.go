@@ -11,7 +11,6 @@ const FVALUE_MSG = "fValue"
 const FVALUEFAIL_MSG = "fValueF"
 const FLOOKUP_MSG = "fNode"
 const ID_LENGTH = 20
-const BUCKET_SIZE = 20
 
 // Server listen port
 const RECEIVER_PORT = 1053

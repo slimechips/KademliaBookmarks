@@ -24,14 +24,15 @@ type Node struct {
 	mutex        *sync.Mutex
 }
 
-func (n *Node) Republish() {
-	for key, value := range n.Data {
+func (node *Node) Republish() {
+	for key, value := range node.Data {
 		// check if you are supposed to republish
 		// assume it is supposed to store
-		nodeCores := node0.KNodesLookUp(key)
-		n.StoreInNodes(nodeCores, key, value)
+		nodeCores := node.KNodesLookUp(key)
+		node.StoreInNodes(nodeCores, key, value)
 	}
 }
+
 func (n *Node) Update(otherNodeCore *NodeCore) {
 
 	prefix_length := otherNodeCore.GUID.Xor(n.NodeCore.GUID).PrefixLen()

@@ -50,6 +50,7 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 			bucket.PushFront(otherNodeCore)
 		} else {
 			// TODO: Handle insertion when the list is full by evicting old elements if
+			log.Println(bucket)
 			LRUNode := bucket.Back()
 			pingOK := make(chan string)
 			ping := false

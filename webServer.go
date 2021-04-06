@@ -98,7 +98,8 @@ func (w WebServer) initializeRoutes() {
 		api.GET("/readNeighbors", func(c *gin.Context) {
 			s := ""
 			for i := 0; i < ID_LENGTH*8; i++ {
-				for e := w.node.RoutingTable.Buckets[i].Front(); e != nil; e = e.Next() {
+				bucket := w.node.RoutingTable.Buckets[i]
+				for e := bucket.Front(); e != nil; e = e.Next() {
 					s += e.Value.(*NodeCore).String()
 				}
 			}

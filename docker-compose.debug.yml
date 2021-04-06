@@ -1,6 +1,13 @@
 version: '3.9'
 
 services:
+  testing:
+    image: "golang:1.16.2"
+    networks:
+      kademlia_net:
+        ipv4_address: 10.0.0.253
+    tty: true
+    command: 'tail -f /dev/null'
   node:
     image: kademliabookmarks
     build:
@@ -17,5 +24,5 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.16.238.0/24
-          gateway: 172.16.238.254
+        - subnet: 10.0.0.0/24
+          gateway: 10.0.0.254

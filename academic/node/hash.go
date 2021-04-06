@@ -1,4 +1,4 @@
-package academic
+package node
 
 import (
 	"crypto/sha1"

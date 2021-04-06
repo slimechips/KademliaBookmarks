@@ -18,21 +18,36 @@ import (
 type Node struct {
 	NodeCore     NodeCore
 	RoutingTable RoutingTable
-	Data         map[ID]string //stores a <key,value> pair for retrieval
-	Alive        bool          //for unit testing during prototyping
-	Publish      chan bool
+	Data         map[ID]*Item //stores a <key,value> pair for retrieval
+	Alive        bool         //for unit testing during prototyping
+	PublishChan  chan bool
+	ExpiryChan   chan bool
 	mutex        *sync.Mutex
 }
 
 func (node *Node) Republish() {
-	for key, value := range node.Data {
+	for key, item := range node.Data {
 		// check if you are supposed to republish
 		// assume it is supposed to store
-		nodeCores := node.KNodesLookUp(key)
-		node.StoreInNodes(nodeCores, key, value)
+		if item.IsTimeToPublish(time.Now()) {
+			// restore the nodes
+			nodeCores := node.KNodesLookUp(key)
+			value := item.Value
+			node.StoreInNodes(nodeCores, key, value)
+		}
 	}
 }
 
+func (node *Node) CheckExpiredData() {
+	for key, item := range node.Data {
+		// check if you are supposed to republish
+		// assume it is supposed to store
+		if item.IsItExpired(time.Now()) {
+			// delete the data
+			delete(node.Data, key)
+		}
+	}
+}
 func (n *Node) Update(otherNodeCore *NodeCore) {
 
 	prefix_length := otherNodeCore.GUID.Xor(n.NodeCore.GUID).PrefixLen()
@@ -151,12 +166,12 @@ func (node *Node) recvPing(conn *net.UDPConn, addr *net.UDPAddr) {
 }
 
 func (node *Node) recvStore(key ID, value string) {
-	node.Data[key] = value
+	node.Data[key] = NewItem(value)
 }
 
 func (node *Node) recvTryFindKeyValue(key ID, conn *net.UDPConn, addr *net.UDPAddr) {
-	if val, ok := node.Data[key]; ok {
-		go node.SendResponse(FVALUE_MSG, val, conn, addr)
+	if item, ok := node.Data[key]; ok {
+		go node.SendResponse(FVALUE_MSG, item.Value, conn, addr)
 		return
 	}
 	nodeCores := node.FindClosest(key, K)
@@ -356,7 +371,7 @@ func NewNode(alive bool) *Node {
 	node := &Node{
 		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
 		RoutingTable: *NewRoutingTable(),
-		Data:         make(map[ID]string),
+		Data:         make(map[ID]*Item),
 		Publish:      make(chan bool),
 		Alive:        alive,
 		mutex:        &sync.Mutex{},
@@ -377,6 +392,11 @@ func (node *Node) StartListening() {
 		log.Printf("Some error %v\n", err)
 		return
 	}
+
+	// Run all periodic checking
+	RepublishMessageNewsFlash(node.PublishChan)
+	DeleteDataIfExpireNewsFlash(node.ExpiryChan)
+
 	for {
 		//msgHandler:
 		//format: <senderNodeID>|<IP_address>|<tag>|<msgContent>|
@@ -426,8 +446,18 @@ func (node *Node) StartListening() {
 			// }
 		}
 		select {
-		case <-node.Publish:
+		case <-node.PublishChan:
+			// republish
 			node.Republish()
+
+			// periodic running the publish
+			RepublishMessageNewsFlash(node.PublishChan)
+		case <-node.ExpiryChan:
+			// Delete expired data
+			node.CheckExpiredData()
+
+			// periodic running the expiry
+			DeleteDataIfExpireNewsFlash(node.ExpiryChan)
 		}
 	}
 }

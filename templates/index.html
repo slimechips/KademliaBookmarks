@@ -16,10 +16,10 @@
 </form>
     
 <form action="/api/insert" method="post">
-    <label for="insert-val">insert:</label>
+    <label for="insert-key">insertkey:</label>
+    <input type="text" id="insert-key" name="insertkey">
+    <label for="insert-val">insertval:</label>
     <input type="text" id="insert-val" name="insertval">
     <input type="submit">
 </form>
  
-<!--Embed the footer.html template at this location-->
-{{ template "footer.html" .}}

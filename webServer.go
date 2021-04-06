@@ -82,17 +82,19 @@ func (w WebServer) initializeRoutes() {
 
 		// insert: lookup where to put key and send store to nodes for key
 		api.POST("/insert", func(c *gin.Context) {
-			str := c.PostForm("insertval")
-			key := ConvertStringToID(str)
-			nodeCores := w.node.KNodesLookUp(key)
+			key := c.PostForm("insertkey")
+			val := c.PostForm("insertval")
+			keyID := ConvertStringToID(key)
+			log.Printf("key:%s, val:%s\n", keyID, val)
+			nodeCores := w.node.KNodesLookUp(keyID)
 			nodestr := ""
 			for _, nc := range nodeCores {
 				nodestr += fmt.Sprintf("%s:%s\t", nc.GUID.String(), nc.IP.String())
 			}
 			log.Printf("Storing at nodecores: %s\n", nodestr)
-			w.node.StoreInNodes(nodeCores, key, str)
+			w.node.StoreInNodes(nodeCores, keyID, val)
 			c.JSON(http.StatusOK, gin.H{
-				"inserted value": fmt.Sprintf("%s at %s", str, nodestr)})
+				"inserted value": fmt.Sprintf("%s at %s", val, nodestr)})
 		})
 		// search: lookup key and return value (need to implement return of string in FindValueByKey)
 		api.GET("/readNeighbors", func(c *gin.Context) {

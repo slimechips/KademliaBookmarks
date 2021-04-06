@@ -71,14 +71,14 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 	} else {
 		bucket.MoveToFront(element)
 	}
-	s := "MY RT: "
-	for i := 0; i < ID_LENGTH*8; i++ {
-		bckt := n.RoutingTable.Buckets[i]
-		for e := bckt.Front(); e != nil; e = e.Next() {
-			s += e.Value.(*NodeCore).String()
-		}
-	}
-	log.Println(s)
+	// s := "MY RT: "
+	// for i := 0; i < ID_LENGTH*8; i++ {
+	// 	bckt := n.RoutingTable.Buckets[i]
+	// 	for e := bckt.Front(); e != nil; e = e.Next() {
+	// 		s += e.Value.(*NodeCore).String()
+	// 	}
+	// }
+	// log.Println(s)
 	n.mutex.Unlock()
 
 }
@@ -214,23 +214,29 @@ iterativeFind:
 	for {
 		select {
 		case <-timer.C:
+			log.Println("LOOKUP_TIMEOUT")
 			break iterativeFind
 		case msg := <-chanFail:
 			timer = time.NewTimer(time.Duration(TIMEOUT_DURATION))
 			s := strings.Split(msg, "#")
-			alive = append(alive, s[0])
+			if !StringsListContains(s[0], alive) {
+				alive = append(alive, s[0])
+			}
 			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
 			for _, n := range nodeCoreList {
 				if !StringsListContains(n.GUID.String(), requested) {
-					requested = append(requested, n.String())
+					requested = append(requested, n.GUID.String())
+					//log.Printf("requested: %v", requested)
 					go node.Send(n, FLOOKUP_MSG, key.String(), chanFail, chanSucc)
 				}
 			}
 		case <-chanSucc:
+			log.Println("LOOKUP_SUCCESS")
 			break iterativeFind
 		}
 	}
 	alive = append(alive, node.NodeCore.String())
+	log.Printf("ALIVE: %v", alive)
 	resultNCList := convertStringToNodeCoreList(alive)
 	sort.SliceStable(resultNCList, func(i, j int) bool {
 		return resultNCList[i].GUID.Xor(key).Less(resultNCList[j].GUID.Xor(key))
@@ -278,8 +284,8 @@ iterativeFind:
 			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
 			for _, n := range nodeCoreList {
 				if !StringsListContains(n.GUID.String(), requested) {
+					requested = append(requested, n.GUID.String())
 					go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
-					requested = append(requested, n.String())
 				}
 			}
 		case msg := <-chanSucc:
@@ -467,9 +473,11 @@ func convertKBucketToString(bucket *list.List) string {
 	return s
 }
 
+//TODO: FIX CONVERTSTRING -> OUTPUTS 00000 when STRING
 func ConvertStringToID(s string) ID {
 	i, _ := hex.DecodeString(s)
 	var id_string ID
+	//log.Println(i)
 	copy(id_string[:ID_LENGTH], i)
 	return id_string
 }

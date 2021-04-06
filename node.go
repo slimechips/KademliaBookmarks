@@ -16,19 +16,21 @@ import (
 )
 
 type Node struct {
-	NodeCore     NodeCore      `json:"nodecore"`
-	RoutingTable RoutingTable  `json:"routingtable"`
-	Data         map[ID]string `json:"data"`  //stores a <key,value> pair for retrieval
-	Alive        bool          `json:"alive"` //for unit testing during prototyping
+	NodeCore     NodeCore
+	RoutingTable RoutingTable
+	Data         map[ID]string //stores a <key,value> pair for retrieval
+	Alive        bool          //for unit testing during prototyping
+	Publish      chan bool
 	mutex        *sync.Mutex
 }
 
-func (n *Node) getData() []string {
-	temp := make([]string, 0)
-	for _, v := range n.Data {
-		temp = append(temp, v)
+func (node *Node) Republish() {
+	for key, value := range node.Data {
+		// check if you are supposed to republish
+		// assume it is supposed to store
+		nodeCores := node.KNodesLookUp(key)
+		node.StoreInNodes(nodeCores, key, value)
 	}
-	return temp
 }
 
 func (n *Node) Update(otherNodeCore *NodeCore) {
@@ -46,7 +48,7 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 	}
 	n.mutex.Lock()
 	if element == nil {
-		if bucket.Len() <= K {
+		if bucket.Len() <= BUCKET_SIZE {
 			bucket.PushFront(otherNodeCore)
 		} else {
 			// TODO: Handle insertion when the list is full by evicting old elements if
@@ -226,10 +228,10 @@ func (node *Node) StoreInNodes(nodeCores []*NodeCore, key ID, val string) {
 }
 
 //FindValueByKey sends request to Nodes for target key-value
-func (node *Node) FindValueByKey(key ID) string {
+func (node *Node) FindValueByKey(key ID) {
 	if val, ok := node.Data[key]; ok {
 		log.Println(val)
-		return val
+		return
 	}
 	chanSucc := make(chan string)
 	chanFail := make(chan string)
@@ -255,11 +257,10 @@ iterativeFind:
 					requested = append(requested, n.String())
 				}
 			}
-		case msg := <-chanSucc:
-			return strings.Split(msg, "#")[1]
+		case <-chanSucc:
+			break iterativeFind
 		}
 	}
-	return "value not found"
 }
 
 /*
@@ -347,6 +348,7 @@ func NewNode(alive bool) *Node {
 		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
 		RoutingTable: *NewRoutingTable(),
 		Data:         make(map[ID]string),
+		Publish:      make(chan bool),
 		Alive:        alive,
 		mutex:        &sync.Mutex{},
 	}
@@ -413,6 +415,10 @@ func (node *Node) StartListening() {
 			// if node.tryAddtoNetwork(senderID, senderIp) {
 			// 	node.broadcastNewPeer(senderID, senderIp)
 			// }
+		}
+		select {
+		case <-node.Publish:
+			node.Republish()
 		}
 	}
 }

@@ -1,4 +1,4 @@
-package node
+package main
 
 import (
 	"fmt"
@@ -18,12 +18,12 @@ func NewItem(value string) *Item {
 		Publish: time.Now().Add(REPUBLISHED_DURATION)}
 }
 
-func NewItemALT(value string) *Item {
-	return &Item{
-		Value:   value,
-		Expiry:  time.Now().Add(EXPIRY_DURATION),
-		Publish: time.Now().Add(REPUBLISHED_INITIAL_DURATION)}
-}
+// func NewItemALT(value string) *Item {
+// 	return &Item{
+// 		Value:   value,
+// 		Expiry:  time.Now().Add(EXPIRY_DURATION),
+// 		Publish: time.Now().Add(REPUBLISHED_INITIAL_DURATION)}
+// }
 
 func (item *Item) IsTimeToPublish(current time.Time) bool {
 	return current.After(item.Publish)

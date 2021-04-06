@@ -101,7 +101,7 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 func (n *Node) getData() []string {
 	temp := make([]string, 0)
 	for _, v := range n.Data {
-		temp = append(temp, v)
+		temp = append(temp, v.Value)
 	}
 	return temp
 }
@@ -276,8 +276,8 @@ func (node *Node) StoreInNodes(nodeCores []*NodeCore, key ID, val string) {
 //FindValueByKey sends request to Nodes for target key-value
 func (node *Node) FindValueByKey(key ID) string {
 	if val, ok := node.Data[key]; ok {
-		log.Println(val)
-		return val
+		log.Println(val.Value)
+		return val.Value
 	}
 	chanSucc := make(chan string)
 	chanFail := make(chan string)
@@ -395,7 +395,8 @@ func NewNode(alive bool) *Node {
 		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
 		RoutingTable: *NewRoutingTable(),
 		Data:         make(map[ID]*Item),
-		Publish:      make(chan bool),
+		PublishChan:  make(chan bool),
+		ExpiryChan:   make(chan bool),
 		Alive:        alive,
 		mutex:        &sync.Mutex{},
 	}
@@ -417,8 +418,8 @@ func (node *Node) StartListening() {
 	}
 
 	// Run all periodic checking
-	RepublishMessageNewsFlash(node.PublishChan)
-	DeleteDataIfExpireNewsFlash(node.ExpiryChan)
+	go RepublishMessageNewsFlash(node.PublishChan)
+	go DeleteDataIfExpireNewsFlash(node.ExpiryChan)
 
 	for {
 		//msgHandler:
@@ -474,13 +475,15 @@ func (node *Node) StartListening() {
 			node.Republish()
 
 			// periodic running the publish
-			RepublishMessageNewsFlash(node.PublishChan)
+			go RepublishMessageNewsFlash(node.PublishChan)
 		case <-node.ExpiryChan:
 			// Delete expired data
 			node.CheckExpiredData()
 
 			// periodic running the expiry
-			DeleteDataIfExpireNewsFlash(node.ExpiryChan)
+			go DeleteDataIfExpireNewsFlash(node.ExpiryChan)
+		default:
+			//TODO: IS THIS RIGHT? WE NEED TO TEST REPUBLISHING
 		}
 	}
 }

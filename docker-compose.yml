@@ -1,10 +1,28 @@
-version: '3.4'
+version: '3.9'
 
 services:
-  kademliabookmarks:
+  testing:
+    image: "golang:1.16.2"
+    networks:
+      kademlia_net:
+        ipv4_address: 10.0.0.253
+    tty: true
+    command: 'tail -f /dev/null'
+  node:
     image: kademliabookmarks
     build:
       context: .
       dockerfile: ./Dockerfile
-    ports:
-      - 3000:3000
+    networks:
+      - kademlia_net
+    deploy:
+      mode: replicated
+      replicas: 8
+networks:
+  kademlia_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.0.0.0/24
+          gateway: 10.0.0.254

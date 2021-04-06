@@ -19,7 +19,8 @@ func main() {
 	log.SetOutput(file)
 	log.Println("Log file started")
 	node0 := NewNode(true)
-	go node0.Start(subnetStart + "1")
+	<-time.NewTimer(TIMEOUT_DURATION * 2).C
+	go node0.Start("1", subnetStart+"1")
 	<-time.NewTimer(time.Duration(10) * time.Second).C
 
 	// if node0.NodeCore.IP.String() == "172.16.238.1" {

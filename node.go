@@ -69,22 +69,14 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 			// TODO: Handle insertion when the list is full by evicting old elements if
 			log.Println(bucket)
 			LRUNode := bucket.Back()
-			pingOK := make(chan string)
-			ping := false
-			n.Send(LRUNode.Value.(*NodeCore), PING_MSG, "hi", pingOK)
+			pingok := make(chan string)
+			go n.Send(LRUNode.Value.(*NodeCore), PING_MSG, "hi", pingok)
 			timer := time.NewTimer(TIMEOUT_DURATION)
-		PingLoop:
-			for {
-				select {
-				case <-pingOK:
-					ping = true
-					break PingLoop
-				case <-timer.C:
-					ping = false
-					break PingLoop
-				}
-			}
-			if !ping {
+			select {
+			case <-pingok:
+				log.Println(otherNodeCore.String() + "is alive")
+				n.Update(otherNodeCore)
+			case <-timer.C:
 				// remove the LRUNode
 				bucket.Remove(LRUNode)
 				// add the new node to the front
@@ -94,7 +86,16 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 	} else {
 		bucket.MoveToFront(element)
 	}
+	// s := "MY RT: "
+	// for i := 0; i < ID_LENGTH*8; i++ {
+	// 	bckt := n.RoutingTable.Buckets[i]
+	// 	for e := bckt.Front(); e != nil; e = e.Next() {
+	// 		s += e.Value.(*NodeCore).String()
+	// 	}
+	// }
+	// log.Println(s)
 	n.mutex.Unlock()
+
 }
 
 func (n *Node) getData() []string {
@@ -152,17 +153,33 @@ func (node *Node) recvJoinReq(nodecore *NodeCore, conn *net.UDPConn, addr *net.U
 
 	node.SendResponse(LIST_MSG, convertKBucketToString(node.RoutingTable.Buckets[prefix_length]), conn, addr)
 	node.Update(nodecore)
-	log.Println("UPDATED", nodecore.GUID.String(), prefix_length)
+
 }
 
-func (node *Node) recvJoinListNodeCore(list []*NodeCore) {
+func (node *Node) recvJoinListNodeCore(sentNodeCore *NodeCore, list []*NodeCore) {
+	node.Update(sentNodeCore)
+	if list == nil {
+		return
+	}
 	for _, nodeCore := range list {
-		node.Update(nodeCore)
+		pingOK := make(chan string)
+		log.Println("pinging: " + nodeCore.String())
+		go node.Send(nodeCore, PING_MSG, "hi", pingOK)
+		timer := time.NewTimer(TIMEOUT_DURATION)
+		select {
+		case <-pingOK:
+			log.Println(nodeCore.String() + "is alive")
+			node.Update(nodeCore)
+		case <-timer.C:
+			log.Println("PING TIMEOUT")
+		}
 	}
 }
 
-func (node *Node) recvPing(conn *net.UDPConn, addr *net.UDPAddr) {
+func (node *Node) recvPing(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPAddr) {
 	go node.SendResponse(PING_MSG, "hi", conn, addr)
+	log.Println("received Ping from:" + nodecore.String())
+	node.Update(nodecore)
 }
 
 func (node *Node) recvStore(key ID, value string) {
@@ -212,23 +229,29 @@ iterativeFind:
 	for {
 		select {
 		case <-timer.C:
+			log.Println("LOOKUP_TIMEOUT")
 			break iterativeFind
 		case msg := <-chanFail:
 			timer = time.NewTimer(time.Duration(TIMEOUT_DURATION))
 			s := strings.Split(msg, "#")
-			alive = append(alive, s[0])
+			if !StringsListContains(s[0], alive) {
+				alive = append(alive, s[0])
+			}
 			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
 			for _, n := range nodeCoreList {
 				if !StringsListContains(n.GUID.String(), requested) {
-					requested = append(requested, n.String())
+					requested = append(requested, n.GUID.String())
+					//log.Printf("requested: %v", requested)
 					go node.Send(n, FLOOKUP_MSG, key.String(), chanFail, chanSucc)
 				}
 			}
 		case <-chanSucc:
+			log.Println("LOOKUP_SUCCESS")
 			break iterativeFind
 		}
 	}
 	alive = append(alive, node.NodeCore.String())
+	log.Printf("ALIVE: %v", alive)
 	resultNCList := convertStringToNodeCoreList(alive)
 	sort.SliceStable(resultNCList, func(i, j int) bool {
 		return resultNCList[i].GUID.Xor(key).Less(resultNCList[j].GUID.Xor(key))
@@ -276,8 +299,8 @@ iterativeFind:
 			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
 			for _, n := range nodeCoreList {
 				if !StringsListContains(n.GUID.String(), requested) {
+					requested = append(requested, n.GUID.String())
 					go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
-					requested = append(requested, n.String())
 				}
 			}
 		case msg := <-chanSucc:
@@ -324,7 +347,7 @@ Port suffix is added automatically
 Message format: <NODE_ID>|<TAG>|<MSG>
 Tags: Hello, AddPeer
 */
-func (node *Node) AddrSend(addr string, tag string, rawMsg string) {
+func (node *Node) AddrSend(addr string, tag string, rawMsg string, opt ...chan string) {
 	// Dont send to yourself
 	if node.NodeCore.IP.String() == addr {
 		return
@@ -342,7 +365,7 @@ func (node *Node) AddrSend(addr string, tag string, rawMsg string) {
 	fmt.Fprintf(conn, msg)
 	_, err = bufio.NewReader(conn).Read(p)
 	ad := strings.Split(addr, ":")
-	node.ResponseMsgHandler(fmt.Sprintf("~%s~%s~", ad[0], ad[1]), string(p), nil)
+	node.ResponseMsgHandler(fmt.Sprintf("~%s~%s~", ad[0], ad[1]), string(p), opt)
 	if err == nil {
 		log.Printf("%s\n", p)
 	} else {
@@ -431,7 +454,7 @@ func (node *Node) StartListening() {
 		case JOIN_MSG:
 			go node.recvJoinReq(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
 		case PING_MSG:
-			go node.recvPing(ser, remoteAddr)
+			go node.recvPing(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
 		case STORE_MSG:
 			kv := strings.Split(msgContent, ";")
 			go node.recvStore(ConvertStringToID(kv[0]), kv[1])
@@ -480,9 +503,11 @@ func convertKBucketToString(bucket *list.List) string {
 	return s
 }
 
+//TODO: FIX CONVERTSTRING -> OUTPUTS 00000 when STRING
 func ConvertStringToID(s string) ID {
 	i, _ := hex.DecodeString(s)
 	var id_string ID
+	//log.Println(i)
 	copy(id_string[:ID_LENGTH], i)
 	return id_string
 }
@@ -522,6 +547,8 @@ func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans []chan str
 	msgContent := t[3]
 	log.Println("RESPONSE_HANDLER:", senderID, recvAddr, msgContent)
 	switch tag {
+	case LIST_MSG:
+		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
 	case PING_MSG:
 		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
 	case FVALUE_MSG:
@@ -531,11 +558,6 @@ func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans []chan str
 		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
 	case FLOOKUP_MSG:
 		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
-	case LIST_MSG:
-		if strings.Contains(msgContent, ";") {
-			nodeList := strings.Split(msgContent, ";")
-			go node.recvJoinListNodeCore(convertStringToNodeCoreList(nodeList))
-		}
 	}
 }
 
@@ -601,10 +623,27 @@ func (node *Node) IStart() {
 Start server and try to connect to some other host.
 */
 //TODO: FIX FOR TEST CASES
-func (node *Node) Start(addr string) {
+func (node *Node) Start(nodeId string, addr string) {
 	go node.StartListening()
 	timer1 := time.NewTimer(time.Duration(2) * time.Second)
 	<-timer1.C
 
-	go node.AddrSend(addr, JOIN_MSG, "Hello")
+	res := make(chan string)
+	go node.AddrSend(addr, JOIN_MSG, "Hello", res)
+	timer := time.NewTimer(TIMEOUT_DURATION)
+	select {
+	case msg := <-res:
+		log.Println("Received Reply from recvjoinlist")
+		s := strings.Split(msg, "#")
+		msgContent := s[1]
+		var nodeList []string
+		if strings.Contains(msgContent, ";") {
+			nodeList = strings.Split(msgContent, ";")
+		} else {
+			nodeList = nil
+		}
+		go node.recvJoinListNodeCore(createNodeCore(ConvertStringToID(nodeId), net.ParseIP(addr), RECEIVER_PORT),
+			convertStringToNodeCoreList(nodeList))
+	case <-timer.C:
+	}
 }

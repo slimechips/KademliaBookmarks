@@ -4,8 +4,7 @@ services:
   testing:
     image: "golang:1.16.2"
     networks:
-      kademlia_net:
-        ipv4_address: 10.0.0.253
+      - kademlia_net
     tty: true
     command: 'tail -f /dev/null'
   node:

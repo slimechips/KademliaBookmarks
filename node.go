@@ -447,7 +447,7 @@ func (node *Node) StartListening() {
 			log.Println("Error, received invalid message format")
 			continue
 		}
-		senderID := ConvertStringToID(t[0])
+		senderID := NewSHA1ID(t[0])
 		IP_address := net.ParseIP(t[1])
 		tag := t[2]
 		msgContent := t[3]
@@ -460,11 +460,11 @@ func (node *Node) StartListening() {
 			go node.recvPing(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
 		case STORE_MSG:
 			kv := strings.Split(msgContent, ";")
-			go node.recvStore(ConvertStringToID(kv[0]), kv[1])
+			go node.recvStore(NewSHA1ID(kv[0]), kv[1])
 		case FVALUE_MSG:
-			go node.recvTryFindKeyValue(ConvertStringToID(msgContent), ser, remoteAddr)
+			go node.recvTryFindKeyValue(NewSHA1ID(msgContent), ser, remoteAddr)
 		case FLOOKUP_MSG:
-			go node.recvFindNode(ConvertStringToID(msgContent), ser, remoteAddr)
+			go node.recvFindNode(NewSHA1ID(msgContent), ser, remoteAddr)
 		default: // e.g. hello
 			// log.Printf("Node %d-Recv Msg from Node %d(%s): %s \n", node.ID.String(), senderID, senderIp.String(), recvMsg)
 			// if node.tryAddtoNetwork(senderID, senderIp) {
@@ -530,7 +530,7 @@ func convertStringToNodeCoreList(stringList []string) []*NodeCore {
 	for i := 0; i < len(stringList)-1; i++ {
 		//log.Println("CONVERTING TO NODECORE", stringList[i])
 		s1 := strings.Split(stringList[i], "~")
-		id := ConvertStringToID(s1[0])
+		id := NewSHA1ID(s1[0])
 		Port, _ := strconv.Atoi(s1[2])
 		nodecoreList = append(nodecoreList,
 			createNodeCore(id, net.ParseIP(s1[1]), Port))
@@ -545,7 +545,7 @@ func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans []chan str
 		log.Println("Error, received invalid message format")
 		return
 	}
-	senderID := ConvertStringToID(t[0])
+	senderID := NewSHA1ID(t[0])
 	//IP_address := net.ParseIP(t[1])
 	tag := t[2]
 	msgContent := t[3]
@@ -646,7 +646,7 @@ func (node *Node) Start(nodeId string, addr string) {
 		} else {
 			nodeList = nil
 		}
-		go node.recvJoinListNodeCore(createNodeCore(ConvertStringToID(nodeId), net.ParseIP(addr), RECEIVER_PORT),
+		go node.recvJoinListNodeCore(createNodeCore(NewSHA1ID(nodeId), net.ParseIP(addr), RECEIVER_PORT),
 			convertStringToNodeCoreList(nodeList))
 	case <-timer.C:
 	}

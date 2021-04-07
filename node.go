@@ -27,7 +27,6 @@ type Node struct {
 
 func (node *Node) Init(nodeID, targetIP string) {
 	node.NodeCore.GUID = ConvertStringToID(nodeID)
-	node.Start(targetIP)
 }
 
 func (node *Node) Republish() {
@@ -650,9 +649,6 @@ Start server and try to connect to some other host.
 //TODO: FIX FOR TEST CASES
 func (node *Node) Start(addr string) {
 	go node.StartListening()
-	timer1 := time.NewTimer(time.Duration(2) * time.Second)
-	<-timer1.C
-
 	res := make(chan string)
 	go node.AddrSend(addr, JOIN_MSG, "Hello", res)
 	timer := time.NewTimer(TIMEOUT_DURATION)

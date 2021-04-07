@@ -25,9 +25,7 @@ func main() {
 		<-time.NewTimer(time.Duration(10) * time.Second).C
 	} else {
 		log.Println("Got Args yo")
-		<-time.NewTimer(TIMEOUT_DURATION * 2).C
 		go node0.Start(os.Args[2])
-		<-time.NewTimer(time.Duration(10) * time.Second).C
 	}
 
 	// if node0.NodeCore.IP.String() == "172.16.238.1" {

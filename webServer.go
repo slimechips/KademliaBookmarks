@@ -50,7 +50,7 @@ func (w WebServer) initializeRoutes() {
 		// readkey: get k-value of node's data
 		api.POST("/readKey", func(c *gin.Context) {
 			str := c.PostForm("readkey")
-			keyID := NewSHA1ID(str) //ConvertStringToID(hex.EncodeToString([]byte(str)))
+			keyID := NewSHA1ID(str)
 			log.Printf("readKey: %s -> %s -> %s \n", str, keyID, keyID.String())
 			if val, ok := w.node.Data[keyID]; ok {
 				log.Println("I HAVE" + val.Value)
@@ -74,7 +74,7 @@ func (w WebServer) initializeRoutes() {
 		// search: lookup key and return value (need to implement return of string in FindValueByKey)
 		api.POST("/searchValueByKey", func(c *gin.Context) {
 			str := c.PostForm("searchkey")
-			key := NewSHA1ID(str) //ConvertStringToID(hex.EncodeToString([]byte(str)))
+			key := NewSHA1ID(str)
 			log.Printf("searchValueByKey: %s -> %s \n", str, key)
 			s := w.node.FindValueByKey(key)
 			c.JSON(http.StatusOK, gin.H{
@@ -85,8 +85,8 @@ func (w WebServer) initializeRoutes() {
 		api.POST("/insert", func(c *gin.Context) {
 			key := c.PostForm("insertkey")
 			val := c.PostForm("insertval")
-			keyID := NewSHA1ID(key) //ConvertStringToID(hex.EncodeToString([]byte(key)))
-			log.Printf("readKey: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)
+			keyID := NewSHA1ID(key)
+			log.Printf("insert: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)
 			nodeCores := w.node.KNodesLookUp(keyID)
 			nodestr := ""
 			for _, nc := range nodeCores {

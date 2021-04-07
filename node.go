@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"container/list"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -78,6 +77,7 @@ func (n *Node) Update(otherNodeCore *NodeCore) {
 			timer := time.NewTimer(TIMEOUT_DURATION)
 			select {
 			case <-pingok:
+				timer.Stop()
 				log.Println(otherNodeCore.String() + "is alive")
 				n.Update(otherNodeCore)
 			case <-timer.C:
@@ -153,11 +153,14 @@ func (n *Node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
 
 //recvJoinReq appends new nodecore to my routing table and send listRecv to this new nodecore
 func (node *Node) recvJoinReq(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPAddr) {
+	// node.mutex.Lock()
+	// defer node.mutex.Unlock()
 	nodeCores := node.KNodesLookUp(nodecore.GUID)
 	s := ""
 	for _, nc := range nodeCores {
 		s += nc.String()
 	}
+	log.Println("JOINREQ: " + s)
 	node.SendResponse(LIST_MSG, s, conn, addr)
 	node.Update(nodecore)
 
@@ -165,6 +168,7 @@ func (node *Node) recvJoinReq(nodecore *NodeCore, conn *net.UDPConn, addr *net.U
 
 func (node *Node) recvJoinListNodeCore(sentNodeCore *NodeCore, list []*NodeCore) {
 	node.Update(sentNodeCore)
+	log.Printf("LIST:%v\n", list)
 	if list == nil {
 		return
 	}
@@ -175,6 +179,7 @@ func (node *Node) recvJoinListNodeCore(sentNodeCore *NodeCore, list []*NodeCore)
 		timer := time.NewTimer(TIMEOUT_DURATION)
 		select {
 		case <-pingOK:
+			timer.Stop()
 			log.Println(nodeCore.String() + "is alive")
 			node.Update(nodeCore)
 		case <-timer.C:
@@ -184,6 +189,8 @@ func (node *Node) recvJoinListNodeCore(sentNodeCore *NodeCore, list []*NodeCore)
 }
 
 func (node *Node) recvPing(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPAddr) {
+	// node.mutex.Lock()
+	// defer node.mutex.Unlock()
 	go node.SendResponse(PING_MSG, "hi", conn, addr)
 	log.Println("received Ping from:" + nodecore.String())
 	node.Update(nodecore)
@@ -240,19 +247,26 @@ iterativeFind:
 			break iterativeFind
 		case msg := <-chanFail:
 			timer = time.NewTimer(time.Duration(TIMEOUT_DURATION))
+			log.Println("MSGTOLOOKUP:" + msg)
 			s := strings.Split(msg, "#")
+
 			if !StringsListContains(s[0], alive) {
 				alive = append(alive, s[0])
 			}
-			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
-			for _, n := range nodeCoreList {
-				if !StringsListContains(n.GUID.String(), requested) {
-					requested = append(requested, n.GUID.String())
-					node.Update(n)
-					go node.Send(n, FLOOKUP_MSG, key.String(), chanFail, chanSucc)
+			ss := strings.Split(s[1], ";")
+			if len(ss) >= 2 {
+				nodeCoreList := convertStringToNodeCoreList(ss)
+				for _, n := range nodeCoreList {
+					if !StringsListContains(n.GUID.String(), requested) {
+						requested = append(requested, n.GUID.String())
+						node.Update(n)
+						go node.Send(n, FLOOKUP_MSG, key.String(), chanFail, chanSucc)
+					}
 				}
 			}
+
 		case <-chanSucc:
+			timer.Stop()
 			log.Println("LOOKUP_SUCCESS")
 			break iterativeFind
 		}
@@ -282,6 +296,8 @@ func (node *Node) StoreInNodes(nodeCores []*NodeCore, key ID, val string) {
 
 //FindValueByKey sends request to Nodes for target key-value
 func (node *Node) FindValueByKey(key ID) string {
+	// node.mutex.Lock()
+	// defer node.mutex.Unlock()
 	if val, ok := node.Data[key]; ok {
 		log.Println(val.Value)
 		return val.Value
@@ -303,15 +319,19 @@ iterativeFind:
 		case msg := <-chanFail:
 			timer = time.NewTimer(time.Duration(TIMEOUT_DURATION))
 			s := strings.Split(msg, "#")
-			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
-			for _, n := range nodeCoreList {
-				if !StringsListContains(n.GUID.String(), requested) {
-					requested = append(requested, n.GUID.String())
-					node.Update(n)
-					go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
+			ss := strings.Split(s[1], ";")
+			if len(ss) >= 2 {
+				nodeCoreList := convertStringToNodeCoreList(ss)
+				for _, n := range nodeCoreList {
+					if !StringsListContains(n.GUID.String(), requested) {
+						requested = append(requested, n.GUID.String())
+						node.Update(n)
+						go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
+					}
 				}
 			}
 		case msg := <-chanSucc:
+			timer.Stop()
 			return strings.Split(msg, "#")[1]
 		}
 	}
@@ -337,7 +357,7 @@ func (node *Node) Send(nodeCore *NodeCore, tag string, rawMsg string, opts ...ch
 	}
 
 	msg := fmt.Sprintf("%s|%s|%s|%s|", node.NodeCore.GUID.String(), node.NodeCore.IP.String(), tag, rawMsg)
-	log.Printf("Node %d->Sending to %s ---->----- %s\n", node.NodeCore.GUID, addr, msg)
+	log.Printf("Node %d->Sending to %s ---->----- %s\n", node.NodeCore.GUID.String(), addr, msg)
 	fmt.Fprintf(conn, msg)
 	//waiting for response
 	_, err = bufio.NewReader(conn).Read(p)
@@ -477,26 +497,25 @@ func (node *Node) StartListening() {
 			log.Println("Error, received invalid message format")
 			continue
 		}
-		senderID := NewSHA1ID(t[0])
+		senderID := ConvertStringToID(t[0])
 		IP_address := net.ParseIP(t[1])
 		tag := t[2]
 		msgContent := t[3]
 		log.Println("RECEIVING:", msgContent)
 
-		node.Update(createNodeCore(senderID, IP_address, RECEIVER_PORT))
 		// Receiver perspective of what request send it
 		switch tag {
 		case JOIN_MSG:
-			go node.recvJoinReq(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
+			node.recvJoinReq(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
 		case PING_MSG:
-			go node.recvPing(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
+			node.recvPing(createNodeCore(senderID, IP_address, RECEIVER_PORT), ser, remoteAddr)
 		case STORE_MSG:
 			kv := strings.Split(msgContent, ";")
-			go node.recvStore(NewSHA1ID(kv[0]), kv[1])
+			node.recvStore(ConvertStringToID(kv[0]), kv[1])
 		case FVALUE_MSG:
-			go node.recvTryFindKeyValue(NewSHA1ID(msgContent), ser, remoteAddr)
+			node.recvTryFindKeyValue(ConvertStringToID(msgContent), ser, remoteAddr)
 		case FLOOKUP_MSG:
-			go node.recvFindNode(NewSHA1ID(msgContent), ser, remoteAddr)
+			node.recvFindNode(ConvertStringToID(msgContent), ser, remoteAddr)
 		default: // e.g. hello
 			// log.Printf("Node %d-Recv Msg from Node %d(%s): %s \n", node.ID.String(), senderID, senderIp.String(), recvMsg)
 			// if node.tryAddtoNetwork(senderID, senderIp) {
@@ -543,13 +562,16 @@ func StringsListContains(s string, stringList []string) bool {
 
 func convertStringToNodeCoreList(stringList []string) []*NodeCore {
 	nodecoreList := make([]*NodeCore, 0)
-	for i := 0; i < len(stringList)-1; i++ {
+	for i := 0; i < len(stringList); i++ {
 		//log.Println("CONVERTING TO NODECORE", stringList[i])
 		s1 := strings.Split(stringList[i], "~")
-		id := NewSHA1ID(s1[0])
-		Port, _ := strconv.Atoi(s1[2])
-		nodecoreList = append(nodecoreList,
-			createNodeCore(id, net.ParseIP(s1[1]), Port))
+		log.Println("STRINGLIST:" + stringList[i])
+		if len(s1) > 2 {
+			id := ConvertStringToID(s1[0])
+			Port, _ := strconv.Atoi(s1[2])
+			nodecoreList = append(nodecoreList,
+				createNodeCore(id, net.ParseIP(s1[1]), Port))
+		}
 	}
 	return nodecoreList
 }
@@ -561,11 +583,11 @@ func (node *Node) ResponseMsgHandler(recvAddr string, s string, chans []chan str
 		log.Println("Error, received invalid message format")
 		return
 	}
-	senderID := NewSHA1ID(t[0])
+	senderID := ConvertStringToID(t[0])
 	//IP_address := net.ParseIP(t[1])
 	tag := t[2]
 	msgContent := t[3]
-	log.Println("RESPONSE_HANDLER:", senderID, recvAddr, msgContent)
+	log.Println("RESPONSE_HANDLER:", senderID, tag, recvAddr, msgContent)
 	switch tag {
 	case LIST_MSG:
 		chans[0] <- senderID.String() + recvAddr + "#" + msgContent
@@ -623,13 +645,8 @@ Determine node ndame from IP. Works only in docker
 func getNodeName(ip net.IP) ID {
 	ipArr := strings.Split(ip.String(), ".")
 
-	a, _ := strconv.Atoi(ipArr[3])
-	b := make([]byte, 20)
-	binary.LittleEndian.PutUint64(b, uint64(a))
-	var arr ID
-	copy(arr[:ID_LENGTH], b[:])
 	//log.Println(ip.String(), ipArr[3], b, arr)
-	return arr
+	return NewSHA1ID(ipArr[3])
 }
 
 /*
@@ -650,9 +667,10 @@ func (node *Node) Start(nodeId string, addr string) {
 
 	res := make(chan string)
 	go node.AddrSend(addr, JOIN_MSG, "Hello", res)
-	timer := time.NewTimer(TIMEOUT_DURATION)
+	timer := time.NewTimer(JOIN_WAIT_DURATION)
 	select {
 	case msg := <-res:
+		timer.Stop()
 		log.Println("Received Reply from recvjoinlist")
 		s := strings.Split(msg, "#")
 		msgContent := s[1]
@@ -662,8 +680,10 @@ func (node *Node) Start(nodeId string, addr string) {
 		} else {
 			nodeList = nil
 		}
-		go node.recvJoinListNodeCore(createNodeCore(NewSHA1ID(nodeId), net.ParseIP(addr), RECEIVER_PORT),
+		node.recvJoinListNodeCore(createNodeCore(ConvertStringToID(nodeId), net.ParseIP(addr), RECEIVER_PORT),
 			convertStringToNodeCoreList(nodeList))
 	case <-timer.C:
+		log.Println("JOIN_LIST_TIMEOUT")
+
 	}
 }

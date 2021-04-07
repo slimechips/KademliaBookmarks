@@ -109,7 +109,13 @@ func (w WebServer) initializeRoutes() {
 			c.JSON(http.StatusOK, gin.H{
 				"Search Value By Key": s})
 		})
-
+		// api.POST("/init", func(c *gin.Context) {
+		// 	nodeID := c.PostForm("nodeId")
+		// 	targetIP := c.PostForm("targetIP")
+		// 	w.node.Init(nodeID, targetIP)
+		// 	c.JSON(http.StatusOK, gin.H{
+		// 		"Set Node ID": fmt.Sprintf("Node %s, My IP Address %s", w.node.NodeCore.GUID, w.node.NodeCore.IP)})
+		// })
 		//TODO: functions of api
 
 		// dont forget to cache titles of keys into personal

@@ -25,6 +25,11 @@ type Node struct {
 	mutex        *sync.Mutex
 }
 
+func (node *Node) Init(nodeID, targetIP string) {
+	node.NodeCore.GUID = ConvertStringToID(nodeID)
+	node.Start(targetIP)
+}
+
 func (node *Node) Republish() {
 	for key, item := range node.Data {
 		// check if you are supposed to republish
@@ -150,10 +155,11 @@ func (n *Node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
 //recvJoinReq appends new nodecore to my routing table and send listRecv to this new nodecore
 func (node *Node) recvJoinReq(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPAddr) {
 	prefix_length := nodecore.GUID.Xor(node.NodeCore.GUID).PrefixLen()
-
-	node.SendResponse(LIST_MSG, convertKBucketToString(node.RoutingTable.Buckets[prefix_length]), conn, addr)
+	kBucketStr := convertKBucketToString(node.RoutingTable.Buckets[prefix_length])
+	nodeCoreStr := node.NodeCore.String()
+	msg := fmt.Sprintf("%s^%s^", kBucketStr, nodeCoreStr)
+	node.SendResponse(LIST_MSG, msg, conn, addr)
 	node.Update(nodecore)
-
 }
 
 func (node *Node) recvJoinListNodeCore(sentNodeCore *NodeCore, list []*NodeCore) {
@@ -387,18 +393,27 @@ func createNodeCore(guid ID, ip_address net.IP, udp_port int) *NodeCore {
 	return &n
 }
 
+func createNodeCoreNoGUID(ip_address net.IP, udp_port int) *NodeCore {
+	n := NodeCore{IP: ip_address, Port: udp_port}
+	return &n
+}
+
 //NewNode initalise node based on system IP
-func NewNode(alive bool) *Node {
+func NewNode(alive bool, args []string) *Node {
 	ip := getIp()
-	id := getNodeName(ip)
 	node := &Node{
-		NodeCore:     *createNodeCore(id, ip, RECEIVER_PORT),
+		NodeCore:     *createNodeCoreNoGUID(ip, RECEIVER_PORT),
 		RoutingTable: *NewRoutingTable(),
 		Data:         make(map[ID]*Item),
 		PublishChan:  make(chan bool),
 		ExpiryChan:   make(chan bool),
 		Alive:        alive,
 		mutex:        &sync.Mutex{},
+	}
+	if len(args) <= 1 {
+		node.NodeCore.GUID = getNodeName(ip)
+	} else {
+		node.Init(args[0], args[1])
 	}
 	log.Println("Current Node Info:", *node)
 	return node
@@ -524,6 +539,13 @@ func StringsListContains(s string, stringList []string) bool {
 	return false
 }
 
+func convertStringToNodeCore(s string) *NodeCore {
+	s1 := strings.Split(s, "~")
+	id := ConvertStringToID(s1[0])
+	Port, _ := strconv.Atoi(s1[2])
+	return createNodeCore(id, net.ParseIP(s1[1]), Port)
+}
+
 func convertStringToNodeCoreList(stringList []string) []*NodeCore {
 	nodecoreList := make([]*NodeCore, 0)
 	for i := 0; i < len(stringList)-1; i++ {
@@ -626,7 +648,7 @@ func (node *Node) IStart() {
 Start server and try to connect to some other host.
 */
 //TODO: FIX FOR TEST CASES
-func (node *Node) Start(nodeId string, addr string) {
+func (node *Node) Start(addr string) {
 	go node.StartListening()
 	timer1 := time.NewTimer(time.Duration(2) * time.Second)
 	<-timer1.C
@@ -639,13 +661,16 @@ func (node *Node) Start(nodeId string, addr string) {
 		log.Println("Received Reply from recvjoinlist")
 		s := strings.Split(msg, "#")
 		msgContent := s[1]
+		a := strings.Split(msgContent, "^")
+		nodeListStr := a[0]
+		senderNodeCore := a[1]
 		var nodeList []string
-		if strings.Contains(msgContent, ";") {
-			nodeList = strings.Split(msgContent, ";")
+		if strings.Contains(nodeListStr, ";") {
+			nodeList = strings.Split(nodeListStr, ";")
 		} else {
 			nodeList = nil
 		}
-		go node.recvJoinListNodeCore(createNodeCore(ConvertStringToID(nodeId), net.ParseIP(addr), RECEIVER_PORT),
+		go node.recvJoinListNodeCore(convertStringToNodeCore(senderNodeCore),
 			convertStringToNodeCoreList(nodeList))
 	case <-timer.C:
 	}

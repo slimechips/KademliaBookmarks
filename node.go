@@ -31,7 +31,11 @@ func (node *Node) Republish() {
 		// assume it is supposed to store
 		if item.IsTimeToPublish(time.Now()) {
 			// restore the nodes
+			log.Printf("I am republishing <%s,%s>\n", key, item.Value)
 			nodeCores := node.KNodesLookUp(key)
+			for i := range nodeCores {
+				log.Printf("I am sending to %s\n", nodeCores[i])
+			}
 			value := item.Value
 			node.StoreInNodes(nodeCores, key, value)
 		}
@@ -149,9 +153,12 @@ func (n *Node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
 
 //recvJoinReq appends new nodecore to my routing table and send listRecv to this new nodecore
 func (node *Node) recvJoinReq(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPAddr) {
-	prefix_length := nodecore.GUID.Xor(node.NodeCore.GUID).PrefixLen()
-
-	node.SendResponse(LIST_MSG, convertKBucketToString(node.RoutingTable.Buckets[prefix_length]), conn, addr)
+	nodeCores := node.KNodesLookUp(nodecore.GUID)
+	s := ""
+	for _, nc := range nodeCores {
+		s += nc.String()
+	}
+	node.SendResponse(LIST_MSG, s, conn, addr)
 	node.Update(nodecore)
 
 }
@@ -241,7 +248,7 @@ iterativeFind:
 			for _, n := range nodeCoreList {
 				if !StringsListContains(n.GUID.String(), requested) {
 					requested = append(requested, n.GUID.String())
-					//log.Printf("requested: %v", requested)
+					node.Update(n)
 					go node.Send(n, FLOOKUP_MSG, key.String(), chanFail, chanSucc)
 				}
 			}
@@ -298,9 +305,9 @@ iterativeFind:
 			s := strings.Split(msg, "#")
 			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
 			for _, n := range nodeCoreList {
-
 				if !StringsListContains(n.GUID.String(), requested) {
 					requested = append(requested, n.GUID.String())
+					node.Update(n)
 					go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
 				}
 			}
@@ -423,6 +430,29 @@ func (node *Node) StartListening() {
 	go RepublishMessageNewsFlash(node.PublishChan)
 	go DeleteDataIfExpireNewsFlash(node.ExpiryChan)
 
+	// listening
+	go func(node *Node) {
+		for {
+			select {
+			case <-node.PublishChan:
+				// republish
+				log.Println("check republish")
+				node.Republish()
+
+				// periodic running the publish
+				go RepublishMessageNewsFlash(node.PublishChan)
+			case <-node.ExpiryChan:
+				// Delete expired data
+				node.CheckExpiredData()
+
+				// periodic running the expiry
+				go DeleteDataIfExpireNewsFlash(node.ExpiryChan)
+			default:
+				//TODO: IS THIS RIGHT? WE NEED TO TEST REPUBLISHING
+			}
+		}
+	}(node)
+
 	for {
 		//msgHandler:
 		//format: <senderNodeID>|<IP_address>|<tag>|<msgContent>|
@@ -452,6 +482,8 @@ func (node *Node) StartListening() {
 		tag := t[2]
 		msgContent := t[3]
 		log.Println("RECEIVING:", msgContent)
+
+		node.Update(createNodeCore(senderID, IP_address, RECEIVER_PORT))
 		// Receiver perspective of what request send it
 		switch tag {
 		case JOIN_MSG:
@@ -470,22 +502,6 @@ func (node *Node) StartListening() {
 			// if node.tryAddtoNetwork(senderID, senderIp) {
 			// 	node.broadcastNewPeer(senderID, senderIp)
 			// }
-		}
-		select {
-		case <-node.PublishChan:
-			// republish
-			node.Republish()
-
-			// periodic running the publish
-			go RepublishMessageNewsFlash(node.PublishChan)
-		case <-node.ExpiryChan:
-			// Delete expired data
-			node.CheckExpiredData()
-
-			// periodic running the expiry
-			go DeleteDataIfExpireNewsFlash(node.ExpiryChan)
-		default:
-			//TODO: IS THIS RIGHT? WE NEED TO TEST REPUBLISHING
 		}
 	}
 }

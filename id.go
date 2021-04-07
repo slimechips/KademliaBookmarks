@@ -34,7 +34,7 @@ func NewSHA1ID(address string) (ret ID) {
 }
 
 func (id ID) String() string {
-	return hex.EncodeToString(id[0:ID_LENGTH])
+	return string(id[:])
 }
 
 func (id ID) Equals(other ID) bool {

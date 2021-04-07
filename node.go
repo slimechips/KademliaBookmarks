@@ -298,6 +298,7 @@ iterativeFind:
 			s := strings.Split(msg, "#")
 			nodeCoreList := convertStringToNodeCoreList(strings.Split(s[1], ";"))
 			for _, n := range nodeCoreList {
+
 				if !StringsListContains(n.GUID.String(), requested) {
 					requested = append(requested, n.GUID.String())
 					go node.Send(n, FVALUE_MSG, key.String(), chanFail, chanSucc)
@@ -307,6 +308,7 @@ iterativeFind:
 			return strings.Split(msg, "#")[1]
 		}
 	}
+
 	return "value not found"
 }
 
@@ -506,9 +508,8 @@ func convertKBucketToString(bucket *list.List) string {
 	return s
 }
 
-//TODO: FIX CONVERTSTRING -> OUTPUTS 00000 when STRING
 func ConvertStringToID(s string) ID {
-	i, _ := hex.DecodeString(s)
+	i, _ := hex.DecodeString(hex.EncodeToString([]byte(s)))
 	var id_string ID
 	//log.Println(i)
 	copy(id_string[:ID_LENGTH], i)

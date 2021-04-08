@@ -103,7 +103,7 @@ func (w WebServer) initializeRoutes() {
 			for i := 0; i < ID_LENGTH*8; i++ {
 				bucket := w.node.RoutingTable.Buckets[i]
 				for e := bucket.Front(); e != nil; e = e.Next() {
-					s += e.Value.(*NodeCore).String()
+					s += fmt.Sprintf("Bucket %d: %s\n", i, e.Value.(*NodeCore).String())
 				}
 			}
 			log.Printf("readNeighbors: %s\n", s)

@@ -11,7 +11,7 @@ for ($i=1; $i -le $NODES; $i++) {
     --network kad_net `
     -p ${port}:8080 `
     --ip $ip `
-    --mount type=bind,source=$pwd/logs_node$i,target=/app/logs `
+    --mount type=bind,source=$pwd/logs/node$i,target=/app/logs `
     kadbm:latest
 }
 

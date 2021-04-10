@@ -8,10 +8,13 @@ import (
 )
 
 const subnetStart = "10.0.0."
+const logsDir = "./logs"
 
 func main() {
-
-	file, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if _, err := os.Stat(logsDir); os.IsNotExist(err) {
+		os.Mkdir(logsDir, os.ModeDir)
+	}
+	file, err := os.OpenFile(logsDir+"/app.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}

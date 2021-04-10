@@ -6,7 +6,13 @@ for ($i=1; $i -le $NODES; $i++) {
   $port = 9000 + $i
   $ip = "10.0.0." + $i
   Write-Host Creating container $i on $ip, publishing to $port
-  docker run -dit --name kad_node_$i --network kad_net -p ${port}:8080 --ip $ip kadbm:latest
+  docker run -dit `
+    --name kad_node_$i `
+    --network kad_net `
+    -p ${port}:8080 `
+    --ip $ip `
+    --mount type=bind,source=$pwd/logs_node$i,target=/app/logs `
+    kadbm:latest
 }
 
 Read-Host -Prompt "Press Enter to Terminate..."

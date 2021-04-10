@@ -364,7 +364,7 @@ func (node *Node) Send(nodeCore *NodeCore, tag string, rawMsg string, opts ...ch
 	}
 
 	msg := fmt.Sprintf("%s|%s|%s|%s|", node.NodeCore.GUID.String(), node.NodeCore.IP.String(), tag, rawMsg)
-	log.Printf("Node %d->Sending to %s ---->----- %s\n", node.NodeCore.GUID.String(), addr, msg)
+	log.Printf("Node %d->Sending to %s ---->----- %s\n", node.NodeCore.GUID, addr, msg)
 	fmt.Fprintf(conn, msg)
 	//waiting for response
 	_, err = bufio.NewReader(conn).Read(p)

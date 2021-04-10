@@ -8,6 +8,10 @@ go build main
 ./main.exe <my_assigned_node_id> <ip_address_of_bootstrap>
 ```
 
+## View in webpage
+
+Node 1 will be on `localhost:9001`, Node 2 will be on `localhost:9002` etc
+
 ## Docker
 
 ### (New) Build image and start docker containers

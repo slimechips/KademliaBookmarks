@@ -18,10 +18,15 @@ func main() {
 
 	log.SetOutput(file)
 	log.Println("Log file started")
-	node0 := NewNode(true)
-	<-time.NewTimer(TIMEOUT_DURATION * 2).C
-	go node0.Start("1", subnetStart+"1")
-	<-time.NewTimer(time.Duration(10) * time.Second).C
+	node0 := NewNode(true, os.Args[1:])
+	if len(os.Args) <= 1 {
+		<-time.NewTimer(TIMEOUT_DURATION * 2).C
+		go node0.Start(subnetStart + "1")
+		<-time.NewTimer(time.Duration(10) * time.Second).C
+	} else {
+		log.Println("Got Args yo")
+		go node0.Start(os.Args[2])
+	}
 
 	// if node0.NodeCore.IP.String() == "172.16.238.1" {
 	// 	log.Println("We're node 1. Starting test case by storing")

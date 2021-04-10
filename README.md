@@ -1,5 +1,13 @@
 # Kademlia Bookmarks
 
+## Running binary
+
+```bash
+go build main
+# windows
+./main.exe <my_assigned_node_id> <ip_address_of_bootstrap>
+```
+
 ## Docker
 
 ### Docker-Compose

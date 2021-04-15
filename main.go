@@ -29,7 +29,6 @@ func main() {
 		<-time.NewTimer(time.Duration(10) * time.Second).C
 	} else {
 		log.Println("Got Args yo")
-		go node0.Start(os.Args[2])
 		if len(os.Args) > 3 {
 			arg3, _ := strconv.Atoi(os.Args[3])
 			arg4, _ := strconv.Atoi(os.Args[4])
@@ -38,6 +37,7 @@ func main() {
 			EXPIRY_DURATION = time.Duration(arg4) * time.Second
 			log.Printf("Setting expiry duration to %d seconds\n", arg4)
 		}
+		go node0.Start(os.Args[2])
 	}
 
 	// if node0.NodeCore.IP.String() == "172.16.238.1" {

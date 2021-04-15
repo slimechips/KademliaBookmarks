@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 )
 
@@ -29,6 +30,14 @@ func main() {
 	} else {
 		log.Println("Got Args yo")
 		go node0.Start(os.Args[2])
+		if len(os.Args) > 3 {
+			arg3, _ := strconv.Atoi(os.Args[3])
+			arg4, _ := strconv.Atoi(os.Args[4])
+			REPUBLISHED_DURATION = time.Duration(arg3) * time.Second
+			log.Printf("Setting republish duration to %d seconds\n", arg3)
+			EXPIRY_DURATION = time.Duration(arg4) * time.Second
+			log.Printf("Setting expiry duration to %d seconds\n", arg4)
+		}
 	}
 
 	// if node0.NodeCore.IP.String() == "172.16.238.1" {

@@ -5,8 +5,8 @@
 ```bash
 go build main
 # windows
-./main.exe <my_assigned_node_id> <ip_address_of_bootstrap>
-```
+./main.exe <my_assigned_node_id> <ip_address_of_bootstrap> <republish duration> <expiry_duration>
+``` 
 
 ## View in webpage
 

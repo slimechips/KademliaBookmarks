@@ -1,8 +1,8 @@
-package main
+package academic
 
 import (
+	"academic/node"
 	"fmt"
-	"main/academic/node"
 )
 
 func main() {

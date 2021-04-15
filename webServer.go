@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,7 +26,7 @@ func initServer(n *Node) *WebServer {
 func (w WebServer) initializeRoutes() {
 	// Handle the index route
 	w.router.GET("/", func(c *gin.Context) {
-		dataLinks := w.node.getData()
+		dataLinks := w.node.getCacheOnlyKeys()
 		// Call the HTML method of the Context to render a template
 		c.HTML(
 			// Set the HTTP status to 200 (OK)
@@ -34,8 +35,9 @@ func (w WebServer) initializeRoutes() {
 			"index.html",
 			// Pass the data that the page uses (in this case, 'title')
 			gin.H{
-				"title":   "KademliaBM",
-				"payload": dataLinks,
+				"title":    "KademliaBM",
+				"nodeInfo": w.node.NodeCore.String(),
+				"payload":  dataLinks,
 			},
 		)
 	})
@@ -44,23 +46,25 @@ func (w WebServer) initializeRoutes() {
 		//home page
 		api.GET("/", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
-				"hi": w.node.NodeCore.String(),
+				"hello": w.node.NodeCore.String(),
 			})
 		})
 		// readkey: get k-value of node's data
 		api.POST("/readKey", func(c *gin.Context) {
-			str := c.PostForm("readkey")
+			str := strings.ToUpper(c.PostForm("readkey"))
 			keyID := NewSHA1ID(str)
 			log.Printf("readKey: %s -> %s -> %s \n", str, keyID, keyID.String())
 			if val, ok := w.node.Data[keyID]; ok {
 				log.Println("I HAVE" + val.Value)
+				strs := strings.Split(val.Value, "*")
 				c.JSON(http.StatusOK, gin.H{
-					"Read Key": val.Value})
+					"Read Key": strs})
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"Read Key": "key not found:" + str})
 			}
 		})
+
 		// readkey: get k-value of node's data
 		api.GET("/readAll", func(c *gin.Context) {
 			log.Print("Trying to read all my data\n")
@@ -73,29 +77,91 @@ func (w WebServer) initializeRoutes() {
 		})
 		// search: lookup key and return value (need to implement return of string in FindValueByKey)
 		api.POST("/searchValueByKey", func(c *gin.Context) {
-			str := c.PostForm("searchkey")
-			key := NewSHA1ID(str)
-			log.Printf("searchValueByKey: %s -> %s \n", str, key)
-			s := w.node.FindValueByKey(key)
-			c.JSON(http.StatusOK, gin.H{
-				"Search Value By Key": s})
+			str := strings.ToUpper(c.PostForm("searchkey"))
+			if str != "" {
+				key := NewSHA1ID(str)
+
+				log.Printf("searchValueByKey: %s -> %s \n", str, key)
+				s := w.node.FindValueByKey(key)
+				strs := strings.Split(s, "*")
+				c.JSON(http.StatusOK, gin.H{
+					"SearchKey": fmt.Sprintf("%s ---- %s", str, strs[1])})
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"SearchFail": "Missing Key"})
+			}
+
+		})
+
+		api.POST("/searchFolder", func(c *gin.Context) {
+
+			folder := c.PostForm("readFol")
+			if folder != "" {
+				folder = strings.ToUpper(c.PostForm("readFol"))
+				keyID := NewSHA1ID(folder)
+				log.Printf("searchFolder: %s -> %s \n", folder, keyID)
+				str := w.node.FindValueByKey(keyID)
+				if str != "value not found" {
+					folV := strings.Split(str, "!")
+					keyValues := make([][]string, 0)
+					for _, k := range folV {
+						val := w.node.FindValueByKey(NewSHA1ID(k))
+						keyValues = append(keyValues, strings.Split(val, "*"))
+					}
+					c.JSON(http.StatusOK, gin.H{
+						"SearchFolder": keyValues})
+				} else {
+					c.JSON(http.StatusOK, gin.H{
+						"SearchFolder": "folder not found"})
+				}
+
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"SearchFail": "Missing Folder Field"})
+			}
+
 		})
 
 		// insert: lookup where to put key and send store to nodes for key
 		api.POST("/insert", func(c *gin.Context) {
-			key := c.PostForm("insertkey")
+			key := strings.ToUpper(c.PostForm("insertkey"))
 			val := c.PostForm("insertval")
-			keyID := NewSHA1ID(key)
-			log.Printf("insert: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)
-			nodeCores := w.node.KNodesLookUp(keyID)
-			nodestr := ""
-			for _, nc := range nodeCores {
-				nodestr += fmt.Sprintf("%s:%s\t", nc.GUID.String(), nc.IP.String())
+			folder := c.PostForm("insertfol")
+			if key != "" && val != "" {
+				if folder == "" {
+					folder = "NOFOLDER"
+				}
+				folder = strings.ToUpper(folder)
+				keyID := NewSHA1ID(key)
+				folID := NewSHA1ID(folder)
+				log.Printf("insert: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)
+				log.Printf("insert: %s in folder %s", key, folder)
+				nodeCores := w.node.KNodesLookUp(keyID)
+				nodestr := ""
+				for _, nc := range nodeCores {
+					nodestr += fmt.Sprintf("%s:%s\t", nc.GUID.String(), nc.IP.String())
+				}
+				log.Printf("Storing at nodecores: %s\n", nodestr)
+				w.node.StoreInNodes(nodeCores, keyID, key+"*"+val)
+				//find folder values
+				folstr := w.node.FindValueByKey(folID)
+				if folstr != "value not found" {
+					folV := strings.Split(folstr, "!")
+					folV = append(folV, key)
+					folNCores := w.node.KNodesLookUp(folID)
+					w.node.StoreInNodes(folNCores, folID, strings.Join(folV, "!"))
+				} else {
+					folNCores := w.node.KNodesLookUp(folID)
+					w.node.StoreInNodes(folNCores, folID, key)
+				}
+				c.JSON(http.StatusOK, gin.H{
+					"value":  fmt.Sprintf("%s at %s", val, nodestr),
+					"folder": folder})
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"insertFail": "empty key or value"})
 			}
-			log.Printf("Storing at nodecores: %s\n", nodestr)
-			w.node.StoreInNodes(nodeCores, keyID, val)
-			c.JSON(http.StatusOK, gin.H{
-				"inserted value": fmt.Sprintf("%s at %s", val, nodestr)})
+
 		})
 		// search: lookup key and return value (need to implement return of string in FindValueByKey)
 		api.GET("/readNeighbors", func(c *gin.Context) {
@@ -110,11 +176,6 @@ func (w WebServer) initializeRoutes() {
 			c.JSON(http.StatusOK, gin.H{
 				"Search Value By Key": s})
 		})
-
-		//TODO: functions of api
-
-		// dont forget to cache titles of keys into personal
-
 	}
 
 }

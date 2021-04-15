@@ -22,12 +22,33 @@ type Node struct {
 	ExpiryChan   chan bool
 	mutex        *sync.Mutex
 	jMutex       *sync.Mutex
+	Cache        []string
 }
 
 func (node *Node) Init(nodeID, targetIP string) {
 	node.NodeCore.GUID = NewSHA1ID(nodeID)
 }
 
+func (node *Node) addToCache(key string) {
+
+	for _, b := range node.Cache {
+		if b == key {
+			return
+		}
+	}
+	node.Cache = append(node.Cache, key)
+
+}
+
+func (node *Node) getCacheOnlyKeys() []string {
+	keysOnly := make([]string, 0)
+	for _, b := range node.Cache {
+		if !strings.Contains(b, "!") {
+			keysOnly = append(keysOnly, b)
+		}
+	}
+	return keysOnly
+}
 func (node *Node) Republish() {
 	for key, item := range node.Data {
 		// check if you are supposed to republish
@@ -207,6 +228,12 @@ func (node *Node) recvPing(nodecore *NodeCore, conn *net.UDPConn, addr *net.UDPA
 
 func (node *Node) recvStore(key ID, value string) {
 	node.Data[key] = NewItem(value)
+	log.Println("VALUECACHE:" + value)
+	s := strings.Split(value, "*")
+	if len(s) > 0 {
+		node.addToCache(s[0])
+	}
+
 }
 
 func (node *Node) recvTryFindKeyValue(key ID, conn *net.UDPConn, addr *net.UDPAddr) {
@@ -441,6 +468,7 @@ func NewNode(alive bool, args []string) *Node {
 		Alive:        alive,
 		mutex:        &sync.Mutex{},
 		jMutex:       &sync.Mutex{},
+		Cache:        make([]string, 0),
 	}
 	if len(args) <= 1 {
 		node.NodeCore.GUID = getNodeName(ip)

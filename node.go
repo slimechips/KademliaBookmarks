@@ -129,6 +129,19 @@ func (n *Node) FindClosest(target ID, count int) (ret []NodeCore) {
 	return
 }
 
+func (n *Node) checkAlive(other *NodeCore) bool {
+	pingok := make(chan string)
+	go n.Send(other, PING_MSG, "hi", pingok)
+	timer := time.NewTimer(TIMEOUT_DURATION)
+	select {
+	case <-pingok:
+		timer.Stop()
+		log.Println(other.String() + "is alive")
+		return true
+	case <-timer.C:
+		return false
+	}
+}
 func (n *Node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
 	bucket_num := target.Xor(n.NodeCore.GUID).PrefixLen()
 	bucket := n.RoutingTable.Buckets[bucket_num]
@@ -138,11 +151,21 @@ func (n *Node) FindClosestRecord(target ID, count int) (ret []nodeCoreRecord) {
 	for i := 1; (bucket_num-i >= 0 || bucket_num+i < ID_LENGTH*8) && len(ret) < count; i++ {
 		if bucket_num-i >= 0 {
 			bucket = n.RoutingTable.Buckets[bucket_num-i]
-			copyToList(bucket, &ret, target)
+			for e := bucket.Front(); e != nil; e = e.Next() {
+				NodeCore := e.Value.(*NodeCore)
+				if n.checkAlive(NodeCore) {
+					addToList(NodeCore, &ret, target)
+				}
+			}
 		}
 		if bucket_num+1 < ID_LENGTH*8 {
 			bucket = n.RoutingTable.Buckets[bucket_num+i]
-			copyToList(bucket, &ret, target)
+			for e := bucket.Front(); e != nil; e = e.Next() {
+				NodeCore := e.Value.(*NodeCore)
+				if n.checkAlive(NodeCore) {
+					addToList(NodeCore, &ret, target)
+				}
+			}
 		}
 	}
 

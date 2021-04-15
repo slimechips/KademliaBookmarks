@@ -28,6 +28,10 @@ func NewRoutingTable() (ret *RoutingTable) {
 	return
 }
 
+func addToList(node *NodeCore, list *[]nodeCoreRecord, target ID) {
+	*list = append(*list, nodeCoreRecord{node, node.GUID.Xor(target)})
+}
+
 func copyToList(bucket *list.List, list *[]nodeCoreRecord, target ID) {
 	for e := bucket.Front(); e != nil; e = e.Next() {
 		NodeCore := e.Value.(*NodeCore)

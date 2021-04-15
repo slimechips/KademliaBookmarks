@@ -19,4 +19,4 @@ const TIMEOUT_DURATION = 2 * time.Second
 const JOIN_WAIT_DURATION = 1 * time.Hour
 
 var REPUBLISHED_DURATION = 10 * time.Second //1 * time.Hour
-var EXPIRY_DURATION = 24 * time.Hour
+var EXPIRY_DURATION = 40 * time.Second      // 24 * time.Hour

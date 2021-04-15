@@ -4,24 +4,41 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"time"
 )
 
 const subnetStart = "10.0.0."
+const logsDir = "./logs"
 
 func main() {
-
-	file, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if _, err := os.Stat(logsDir); os.IsNotExist(err) {
+		os.Mkdir(logsDir, os.ModeDir)
+	}
+	file, err := os.OpenFile(logsDir+"/app.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	log.SetOutput(file)
 	log.Println("Log file started")
-	node0 := NewNode(true)
-	<-time.NewTimer(TIMEOUT_DURATION * 2).C
-	go node0.Start("1", subnetStart+"1")
-	<-time.NewTimer(time.Duration(10) * time.Second).C
+	node0 := NewNode(true, os.Args[1:])
+	if len(os.Args) <= 1 {
+		<-time.NewTimer(TIMEOUT_DURATION * 2).C
+		go node0.Start(subnetStart + "1")
+		<-time.NewTimer(time.Duration(10) * time.Second).C
+	} else {
+		log.Println("Got Args yo")
+		if len(os.Args) > 3 {
+			arg3, _ := strconv.Atoi(os.Args[3])
+			arg4, _ := strconv.Atoi(os.Args[4])
+			REPUBLISHED_DURATION = time.Duration(arg3) * time.Second
+			log.Printf("Setting republish duration to %d seconds\n", arg3)
+			EXPIRY_DURATION = time.Duration(arg4) * time.Second
+			log.Printf("Setting expiry duration to %d seconds\n", arg4)
+		}
+		go node0.Start(os.Args[2])
+	}
 
 	// if node0.NodeCore.IP.String() == "172.16.238.1" {
 	// 	log.Println("We're node 1. Starting test case by storing")

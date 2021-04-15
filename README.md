@@ -1,6 +1,42 @@
 # Kademlia Bookmarks
 
+## Running binary
+
+```bash
+go build main
+# windows
+./main.exe <my_assigned_node_id> <ip_address_of_bootstrap> <republish duration> <expiry_duration>
+``` 
+
+## View in webpage
+
+Node 1 will be on `localhost:9001`, Node 2 will be on `localhost:9002` etc
+
 ## Docker
+
+### (New) Build image and start docker containers
+
+```powershell
+./start.ps1
+```
+
+Containers will delete themselves if you press enter to terminate.
+
+### (New) Start docker containers without building
+
+```powershell
+./fastStart.ps1
+```
+
+Containers will delete themselves if you press enter to terminate.
+
+### (New) Stop docker containers
+
+In case you didnt stop the previous two scripts properly
+
+```powershell
+./stop.ps1
+```
 
 ### Docker-Compose
 
@@ -60,5 +96,5 @@ docker network ls
 See node names and ip addresses on network. (Network name is `kademliabookmarks_kademlia_net`)
 
 ```bash
-docker network inspect kademliabookmarks_kademlia_net
+docker network inspect kad_net
 ```

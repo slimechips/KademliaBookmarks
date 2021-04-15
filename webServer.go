@@ -50,11 +50,12 @@ func (w WebServer) initializeRoutes() {
 		// readkey: get k-value of node's data
 		api.POST("/readKey", func(c *gin.Context) {
 			str := c.PostForm("readkey")
-			key := ConvertStringToID(str)
-			log.Printf("readKeyyy: %s\n", str)
-			if val, ok := w.node.Data[key]; ok {
+			keyID := NewSHA1ID(str)
+			log.Printf("readKey: %s -> %s -> %s \n", str, keyID, keyID.String())
+			if val, ok := w.node.Data[keyID]; ok {
+				log.Println("I HAVE" + val.Value)
 				c.JSON(http.StatusOK, gin.H{
-					"Read Key": val})
+					"Read Key": val.Value})
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"Read Key": "key not found:" + str})
@@ -73,8 +74,8 @@ func (w WebServer) initializeRoutes() {
 		// search: lookup key and return value (need to implement return of string in FindValueByKey)
 		api.POST("/searchValueByKey", func(c *gin.Context) {
 			str := c.PostForm("searchkey")
-			key := ConvertStringToID(str)
-			log.Printf("searchValueByKey: %s\n", str)
+			key := NewSHA1ID(str)
+			log.Printf("searchValueByKey: %s -> %s \n", str, key)
 			s := w.node.FindValueByKey(key)
 			c.JSON(http.StatusOK, gin.H{
 				"Search Value By Key": s})
@@ -84,8 +85,8 @@ func (w WebServer) initializeRoutes() {
 		api.POST("/insert", func(c *gin.Context) {
 			key := c.PostForm("insertkey")
 			val := c.PostForm("insertval")
-			keyID := ConvertStringToID(key)
-			log.Printf("key:%s, val:%s\n", keyID, val)
+			keyID := NewSHA1ID(key)
+			log.Printf("insert: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)
 			nodeCores := w.node.KNodesLookUp(keyID)
 			nodestr := ""
 			for _, nc := range nodeCores {
@@ -102,7 +103,7 @@ func (w WebServer) initializeRoutes() {
 			for i := 0; i < ID_LENGTH*8; i++ {
 				bucket := w.node.RoutingTable.Buckets[i]
 				for e := bucket.Front(); e != nil; e = e.Next() {
-					s += e.Value.(*NodeCore).String()
+					s += fmt.Sprintf("Bucket %d: %s\n", i, e.Value.(*NodeCore).String())
 				}
 			}
 			log.Printf("readNeighbors: %s\n", s)

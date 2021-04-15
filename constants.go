@@ -15,5 +15,8 @@ const ID_LENGTH = 20
 // Server listen port
 const RECEIVER_PORT = 1053
 const TIMEOUT_DURATION = 2 * time.Second
-const REPUBLISHED_DURATION = 1 * time.Hour
-const EXPIRY_DURATION = 24 * time.Hour
+
+const JOIN_WAIT_DURATION = 1 * time.Hour
+
+var REPUBLISHED_DURATION = 10 * time.Second //1 * time.Hour
+var EXPIRY_DURATION = 24 * time.Hour

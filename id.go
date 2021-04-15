@@ -37,6 +37,11 @@ func NewSHA1ID(address string) (ret ID) {
 	return
 }
 
+// func (id ID) String() string {
+// 	return string(id[:])
+// }
+
+
 func (id ID) String() string {
 	return hex.EncodeToString(id[0:ID_LENGTH])
 }

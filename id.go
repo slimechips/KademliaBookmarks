@@ -8,6 +8,10 @@ import (
 
 type ID [ID_LENGTH]byte
 
+func ConvertStringTOByte() {
+
+}
+
 func NewID(data string) (ret ID) {
 	decoded, _ := hex.DecodeString(data)
 	for i := 0; i < ID_LENGTH; i++ {

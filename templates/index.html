@@ -1,25 +1,171 @@
 <!--index.html-->
 
-<!--Embed the header.html template at this location-->
-<!-- TODO: Add components to access APIs in index page -->
-{{ template "header.html" .}}
+<!doctype html>
+<html>
+
+  <head>
+    <!--Use the title variable to set the title of the page-->
+    <title>{{ .title }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <style>
+        body{
+            margin:2vw;
+        }
+
+        .flex-outer,
+        .flex-inner {
+          list-style-type: none;
+          padding: 0;
+        }
+
+        .flex-outer {
+          max-width: 800px;
+          margin: 0 auto;
+        }
+
+        .flex-outer li,
+        .flex-inner {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+
+        .flex-inner {
+          padding: 0 8px;
+          justify-content: space-between;  
+        }
+
+        .flex-outer > li:not(:last-child) {
+          margin-bottom: 10px;
+        }
+
+        .flex-outer li label,
+        .flex-outer li p {
+          padding: 8px;
+          font-weight: 300;
+          letter-spacing: .09em;
+          text-transform: uppercase;
+        }
+
+        .flex-outer > li > label,
+        .flex-outer li p {
+          flex: 1 0 120px;
+          max-width: 220px;
+        }
+
+        .flex-outer > li > label + *,
+        .flex-inner {
+          flex: 1 0 220px;
+        }
+
+        .flex-outer li p {
+          margin: 0;
+        }
+
+        .flex-outer li input:not([type='checkbox']),
+        .flex-outer li textarea {
+          padding: 15px;
+          border: 1px solid black;
+          margin: 5px;
+        }
+
+        .flex-outer li button {
+          margin-left: auto;
+          padding: 8px 16px;
+          border: none;
+          background: #333;
+          color: #f2f2f2;
+          text-transform: uppercase;
+          letter-spacing: .09em;
+          border-radius: 2px;
+        }
+
+        .flex-inner li {
+          width: 100px;
+        }
+        .headerTop{
+            width: 100%;
+            color: black;
+            padding: 10px;
+        }
+        
+        </style>
+  </head>
+
+<body class="container">
+<div class="headerTop">
+    <strong>Kademlia_Bookmarks</strong>
+</div>
+
+<div>
+    Node Info: {{ .nodeInfo }}
+</div>
+
+<div>
+    <div>
+        My Data:
+    </div>
+    {{range .payload}}
+        {{.}}
+    {{end}} 
+
+</div>
+
 <form action="/api/readKey" method="post">
-    <label for="read-key">readkey:</label>
-    <input type="text" id="read-key" name="readkey">
-    <input type="submit">
+    <ul class="flex-outer">
+        <li>
+            <label for="read-key">check:</label>
+            <input  type="text" id="read-key" name="readkey">
+        </li>
+        <li>
+            <button type="submit">CHECK</button>
+        </li>
+    </ul>
 </form>
 
 <form action="/api/searchValueByKey" method="post">
-    <label for="search-key">searchkey:</label>
-    <input type="text" id="search-key" name="searchkey">
-    <input type="submit">
+    <ul class="flex-outer">
+        <li>
+        <label for="search-key">search bookmark</label>
+        <input class="sKey" type="text" id="search-key" name="searchkey">
+        </li>
+        <li>
+            <button type="submit">SEARCH</button>
+        </li>
+    </ul>
 </form>
     
 <form action="/api/insert" method="post">
-    <label for="insert-key">insertkey:</label>
-    <input type="text" id="insert-key" name="insertkey">
-    <label for="insert-val">insertval:</label>
-    <input type="text" id="insert-val" name="insertval">
-    <input type="submit">
+    <ul class="flex-outer">
+        <li>
+            <label for="insert-key">Add Bookmark:</label>
+            <input class="iKey" type="text" id="insert-key" name="insertkey">
+        </li>
+        <li>
+            <label for="insert-val">Link -> </label>
+            <input class="iVal" type="text" id="insert-val" name="insertval">
+        </li>
+        <li>
+            <label for="insert-val">Folder -> </label>
+            <input class="iFol" type="text" id="insert-fol" name="insertfol">
+        </li>
+        <li>
+            <button type="submit">ADD</button>
+        </li>
+    </ul>
 </form>
- 
+
+<form action="/api/searchFolder" method="post">
+    <ul class="flex-outer">
+        <li>
+            <label for="search-fol">Search Folder:</label>
+            <input id="read-fol" name="readFol">
+        </li>
+        <li>
+            <button type="submit">ADD</button>
+        </li>
+    </ul>
+</form>
+</body>
+</html>

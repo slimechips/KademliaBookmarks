@@ -51,17 +51,23 @@ func (w WebServer) initializeRoutes() {
 		})
 		// readkey: get k-value of node's data
 		api.POST("/readKey", func(c *gin.Context) {
-			str := strings.ToUpper(c.PostForm("readkey"))
-			keyID := NewSHA1ID(str)
-			log.Printf("readKey: %s -> %s -> %s \n", str, keyID, keyID.String())
-			if val, ok := w.node.Data[keyID]; ok {
-				log.Println("I HAVE" + val.Value)
-				strs := strings.Split(val.Value, "*")
-				c.JSON(http.StatusOK, gin.H{
-					"Read Key": strs})
+			str := c.PostForm("readkey")
+			if str != "" {
+				str = strings.ToUpper(str)
+				keyID := NewSHA1ID(str)
+				log.Printf("readKey: %s -> %s -> %s \n", str, keyID, keyID.String())
+				if val, ok := w.node.Data[keyID]; ok {
+					log.Println("I HAVE" + val.Value)
+					strs := strings.Split(val.Value, "*")
+					c.JSON(http.StatusOK, gin.H{
+						"Read Key": strs})
+				} else {
+					c.JSON(http.StatusOK, gin.H{
+						"Read Key": "key not found:" + str})
+				}
 			} else {
 				c.JSON(http.StatusOK, gin.H{
-					"Read Key": "key not found:" + str})
+					"SearchFail": "Missing Key"})
 			}
 		})
 
@@ -77,10 +83,10 @@ func (w WebServer) initializeRoutes() {
 		})
 		// search: lookup key and return value (need to implement return of string in FindValueByKey)
 		api.POST("/searchValueByKey", func(c *gin.Context) {
-			str := strings.ToUpper(c.PostForm("searchkey"))
+			str := c.PostForm("searchkey")
 			if str != "" {
+				str = strings.ToUpper(str)
 				key := NewSHA1ID(str)
-
 				log.Printf("searchValueByKey: %s -> %s \n", str, key)
 				s := w.node.FindValueByKey(key)
 				strs := strings.Split(s, "*")
@@ -97,7 +103,7 @@ func (w WebServer) initializeRoutes() {
 
 			folder := c.PostForm("readFol")
 			if folder != "" {
-				folder = strings.ToUpper(c.PostForm("readFol"))
+				folder = strings.ToUpper("/" + folder)
 				keyID := NewSHA1ID(folder)
 				log.Printf("searchFolder: %s -> %s \n", folder, keyID)
 				str := w.node.FindValueByKey(keyID)
@@ -131,7 +137,7 @@ func (w WebServer) initializeRoutes() {
 				if folder == "" {
 					folder = "NOFOLDER"
 				}
-				folder = strings.ToUpper(folder)
+				folder = strings.ToUpper("/" + folder)
 				keyID := NewSHA1ID(key)
 				folID := NewSHA1ID(folder)
 				log.Printf("insert: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)

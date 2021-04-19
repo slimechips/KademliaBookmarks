@@ -1,4 +1,4 @@
-$NODES=3
+$NODES=5
 Write-Host "Building new image kadbm"
 docker build -t kadbm .
 Write-Host "Created Network kad_net"

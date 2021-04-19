@@ -60,14 +60,14 @@ func (w WebServer) initializeRoutes() {
 					log.Println("I HAVE" + val.Value)
 					strs := strings.Split(val.Value, "*")
 					c.JSON(http.StatusOK, gin.H{
-						"Read Key": strs})
+						"ReadKey": strs})
 				} else {
 					c.JSON(http.StatusOK, gin.H{
-						"Read Key": "key not found:" + str})
+						"ReadKey": "key not found:" + str})
 				}
 			} else {
 				c.JSON(http.StatusOK, gin.H{
-					"SearchFail": "Missing Key"})
+					"ReadFail": "Missing Key"})
 			}
 		})
 
@@ -89,9 +89,15 @@ func (w WebServer) initializeRoutes() {
 				key := NewSHA1ID(str)
 				log.Printf("searchValueByKey: %s -> %s \n", str, key)
 				s := w.node.FindValueByKey(key)
-				strs := strings.Split(s, "*")
-				c.JSON(http.StatusOK, gin.H{
-					"SearchKey": fmt.Sprintf("%s ---- %s", str, strs[1])})
+				if s != "value not found" {
+					strs := strings.Split(s, "*")
+					c.JSON(http.StatusOK, gin.H{
+						"SearchKey": fmt.Sprintf("%s ---- %s", str, strs[1])})
+				} else {
+					c.JSON(http.StatusOK, gin.H{
+						"SearchFail": "Key Not Found"})
+				}
+
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"SearchFail": "Missing Key"})

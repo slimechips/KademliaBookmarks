@@ -35,9 +35,10 @@ func (w WebServer) initializeRoutes() {
 			"index.html",
 			// Pass the data that the page uses (in this case, 'title')
 			gin.H{
-				"title":    "KademliaBM",
-				"nodeInfo": w.node.NodeCore.String(),
-				"payload":  dataLinks,
+				"Title":    "KademliaBM",
+				"NodeInfo": w.node.NodeCore.String(),
+				"Payload":  dataLinks,
+				"Debug":    false,
 			},
 		)
 	})
@@ -45,9 +46,21 @@ func (w WebServer) initializeRoutes() {
 	{
 		//home page
 		api.GET("/", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"hello": w.node.NodeCore.String(),
-			})
+			dataLinks := w.node.getCacheOnlyKeys()
+			// Call the HTML method of the Context to render a template
+			c.HTML(
+				// Set the HTTP status to 200 (OK)
+				http.StatusOK,
+				// Use the index.html template
+				"index.html",
+				// Pass the data that the page uses (in this case, 'title')
+				gin.H{
+					"Title":    "KademliaBM",
+					"NodeInfo": w.node.NodeCore.String(),
+					"Payload":  dataLinks,
+					"Debug":    true,
+				},
+			)
 		})
 		// readkey: get k-value of node's data
 		api.POST("/readKey", func(c *gin.Context) {
@@ -70,6 +83,37 @@ func (w WebServer) initializeRoutes() {
 					"ReadFail": "Missing Key"})
 			}
 		})
+		// readkey: get k-value of node's data
+		api.GET("/searchkeybyparameter/:optional", func(c *gin.Context) {
+			str := c.Param("optional")
+			if str != "" {
+				str = strings.ToUpper(str)
+				key := NewSHA1ID(str)
+				log.Printf("searchValueByKey: %s -> %s \n", str, key)
+				s := w.node.FindValueByKey(key)
+				if s != "value not found" {
+					strs := strings.Split(s, "*")
+					c.HTML(
+						// Set the HTTP status to 200 (OK)
+						http.StatusOK,
+						// Use the folder.html template
+						"search.html",
+						// Pass the data that the page uses (in this case, 'title')
+						gin.H{
+							"Title":   str,
+							"Payload": strs[1],
+						},
+					)
+				} else {
+					c.JSON(http.StatusOK, gin.H{
+						"SearchFail": "Key Not Found"})
+				}
+
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"SearchFail": "Missing Key"})
+			}
+		})
 
 		// readkey: get k-value of node's data
 		api.GET("/readAll", func(c *gin.Context) {
@@ -81,7 +125,7 @@ func (w WebServer) initializeRoutes() {
 			c.JSON(http.StatusOK, gin.H{
 				"Read All Keys": s})
 		})
-		// search: lookup key and return value (need to implement return of string in FindValueByKey)
+
 		api.POST("/searchValueByKey", func(c *gin.Context) {
 			str := c.PostForm("searchkey")
 			if str != "" {
@@ -101,6 +145,78 @@ func (w WebServer) initializeRoutes() {
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"SearchFail": "Missing Key"})
+			}
+
+		})
+
+		// search: lookup key and return value (need to implement return of string in FindValueByKey)
+		api.POST("/search", func(c *gin.Context) {
+			str := c.PostForm("searchtext")
+			stype := c.PostForm("searchtype")
+			log.Println("search", str, stype)
+			if stype == "/folder" {
+				if str != "" {
+					str = strings.ToUpper("/" + str)
+					folderName := str
+					keyID := NewSHA1ID(str)
+					log.Printf("searchFolder: %s -> %s \n", str, keyID)
+					str := w.node.FindValueByKey(keyID)
+					if str != "value not found" {
+						folV := strings.Split(str, "!")
+						keyList := make([]string, 0)
+						for _, k := range folV {
+							val := w.node.FindValueByKey(NewSHA1ID(k))
+							keyVal := strings.Split(val, "*")
+							keyList = append(keyList, keyVal[0])
+						}
+						c.HTML(
+							// Set the HTTP status to 200 (OK)
+							http.StatusOK,
+							// Use the folder.html template
+							"folder.html",
+							// Pass the data that the page uses (in this case, 'title')
+							gin.H{
+								"Title":   folderName,
+								"Payload": keyList,
+							},
+						)
+					} else {
+						c.JSON(http.StatusOK, gin.H{
+							"SearchFolder": "folder not found"})
+					}
+
+				} else {
+					c.JSON(http.StatusOK, gin.H{
+						"SearchFail": "Missing Folder Field"})
+				}
+			} else {
+				if str != "" {
+					str = strings.ToUpper(str)
+					key := NewSHA1ID(str)
+					log.Printf("searchValueByKey: %s -> %s \n", str, key)
+					s := w.node.FindValueByKey(key)
+					if s != "value not found" {
+						strs := strings.Split(s, "*")
+						c.HTML(
+							// Set the HTTP status to 200 (OK)
+							http.StatusOK,
+							// Use the folder.html template
+							"search.html",
+							// Pass the data that the page uses (in this case, 'title')
+							gin.H{
+								"Title":   str,
+								"Payload": strs[1],
+							},
+						)
+					} else {
+						c.JSON(http.StatusOK, gin.H{
+							"SearchFail": "Key Not Found"})
+					}
+
+				} else {
+					c.JSON(http.StatusOK, gin.H{
+						"SearchFail": "Missing Key"})
+				}
 			}
 
 		})

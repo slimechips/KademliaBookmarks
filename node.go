@@ -44,13 +44,16 @@ func (node *Node) getCacheOnlyKeys() []string {
 	keysOnly := make([]string, 0)
 	for _, b := range node.Cache {
 		if !strings.Contains(b, "!") {
-			keysOnly = append(keysOnly, b)
+			if _, ok := node.Data[NewSHA1ID(b)]; ok {
+				keysOnly = append(keysOnly, b)
+			}
 		}
 	}
 	return keysOnly
 }
 func (node *Node) Republish() {
 	for key, item := range node.Data {
+		log.Printf("I have key in data: <%s,%s>\n", key.String(), item)
 		// check if you are supposed to republish
 		// assume it is supposed to store
 		if item.IsTimeToPublish(time.Now()) {
@@ -344,10 +347,12 @@ iterativeFind:
 }
 
 func (node *Node) StoreInNodes(nodeCores []*NodeCore, key ID, val string) {
+	log.Println("STORE_IN_NODES,", key.String(), val)
 	for _, nodeCore := range nodeCores {
 		if nodeCore.GUID.Equals(node.NodeCore.GUID) {
 			go node.recvStore(key, val)
 		} else {
+
 			go node.Send(nodeCore, STORE_MSG, fmt.Sprintf("%s;%s;", key.String(), val), nil)
 		}
 	}

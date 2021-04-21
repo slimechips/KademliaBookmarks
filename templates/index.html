@@ -10,12 +10,12 @@
     <meta charset="UTF-8">
     <style>
         html{
-            background-color: #B721FF;
+            background-color: #754eac;
         }
         body{
             margin:2vw;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            
+            font-size: 2vh;
         }
 
         .flex-outer,
@@ -114,12 +114,16 @@
           background-color:#8a1dbd;
           border-radius: 5px;
         }
+        #subheader{
+          font-size: 3vh;
+        }
         </style>
   </head>
 
 <body class="container">
 <div class="headerTop">
     <strong id="brand">_BEEP</strong><strong id="brand2"><a href="/">_BOOP</a></strong><strong>_BOOKMARKS</strong>
+    <div id="subheader">A Kademlia-Based DHT Application</div>
 </div>
 
 {{if .Debug}}
@@ -132,7 +136,7 @@
     <div><strong>My Data:</strong></div>
     <ul class="flex-outer">
       {{range .Payload}}
-    <li><a href="/api/readkeybyparameter/{{.}}">{{.}}</a></li>
+    <li><a href="/api/searchkeybyparameter/{{.}}">{{.}}</a></li>
     {{end}} 
     </ul>
 </div>
@@ -170,7 +174,7 @@
         </li>
     </ul>
 </form>
-    
+{{if .Debug}}
 <form action="/api/insert" method="post">
     <ul class="flex-outer">
         <li>
@@ -190,6 +194,29 @@
         </li>
     </ul>
 </form>
+{{else}}
+<form action="/api/add" method="post">
+  <ul class="flex-outer">
+      <li>
+          <label for="insert-key">Add Bookmark:</label>
+          <input class="iKey" type="text" id="insert-key" name="insertkey">
+      </li>
+      <li>
+          <label for="insert-val">Link -> </label>
+          <input class="iVal" type="text" id="insert-val" name="insertval">
+      </li>
+      <li>
+          <label for="insert-val">Folder -> </label>
+          <input class="iFol" type="text" id="insert-fol" name="insertfol">
+      </li>
+      <li>
+          <button type="submit">ADD</button>
+      </li>
+  </ul>
+</form>
+<div class="flex-outer"><strong>{{.Status}}</strong></div>
+
+{{end}}
 
 {{if .Debug}}
 <form action="/api/searchFolder" method="post">

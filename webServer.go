@@ -35,7 +35,7 @@ func (w WebServer) initializeRoutes() {
 			"index.html",
 			// Pass the data that the page uses (in this case, 'title')
 			gin.H{
-				"Title":    "KademliaBM",
+				"Title":    "BEEP_BOOP_BM",
 				"NodeInfo": w.node.NodeCore.String(),
 				"Payload":  dataLinks,
 				"Debug":    false,
@@ -55,7 +55,7 @@ func (w WebServer) initializeRoutes() {
 				"index.html",
 				// Pass the data that the page uses (in this case, 'title')
 				gin.H{
-					"Title":    "KademliaBM",
+					"Title":    "BEEP_BOOP_BM",
 					"NodeInfo": w.node.NodeCore.String(),
 					"Payload":  dataLinks,
 					"Debug":    true,
@@ -256,7 +256,8 @@ func (w WebServer) initializeRoutes() {
 			val := c.PostForm("insertval")
 			folder := c.PostForm("insertfol")
 			if key != "" && val != "" {
-				if folder == "" {
+				//if no folder listed use EMPTY FOLDER
+				if folder == "" || folder == " " {
 					folder = "NOFOLDER"
 				}
 				folder = strings.ToUpper("/" + folder)
@@ -275,9 +276,18 @@ func (w WebServer) initializeRoutes() {
 				folstr := w.node.FindValueByKey(folID)
 				if folstr != "value not found" {
 					folV := strings.Split(folstr, "!")
-					folV = append(folV, key)
-					folNCores := w.node.KNodesLookUp(folID)
-					w.node.StoreInNodes(folNCores, folID, strings.Join(folV, "!"))
+					ap := true
+					for _, Value := range folV {
+						if Value == key {
+							ap = false
+							break
+						}
+					}
+					if ap {
+						folV = append(folV, key)
+						folNCores := w.node.KNodesLookUp(folID)
+						w.node.StoreInNodes(folNCores, folID, strings.Join(folV, "!"))
+					}
 				} else {
 					folNCores := w.node.KNodesLookUp(folID)
 					w.node.StoreInNodes(folNCores, folID, key)
@@ -285,6 +295,64 @@ func (w WebServer) initializeRoutes() {
 				c.JSON(http.StatusOK, gin.H{
 					"value":  fmt.Sprintf("%s at %s", val, nodestr),
 					"folder": folder})
+			} else {
+				c.JSON(http.StatusOK, gin.H{
+					"insertFail": "empty key or value"})
+			}
+
+		})
+
+		api.POST("/add", func(c *gin.Context) {
+			key := strings.ToUpper(c.PostForm("insertkey"))
+			val := c.PostForm("insertval")
+			folder := c.PostForm("insertfol")
+			if key != "" && val != "" {
+				//if no folder listed use EMPTY FOLDER
+				if folder == "" || folder == " " {
+					folder = "NOFOLDER"
+				}
+				folder = strings.ToUpper("/" + folder)
+				keyID := NewSHA1ID(key)
+				folID := NewSHA1ID(folder)
+				log.Printf("insert: %s -> %s -> %s of val %s \n", key, keyID, keyID.String(), val)
+				log.Printf("insert: %s in folder %s", key, folder)
+				nodeCores := w.node.KNodesLookUp(keyID)
+				nodeCArray := make([]string, 0)
+				nodestr := ""
+				for _, nc := range nodeCores {
+					nodestr += fmt.Sprintf("%s:%s\t", nc.GUID.String(), nc.IP.String())
+					nodeCArray = append(nodeCArray, nc.IP.String())
+				}
+				log.Printf("Storing at nodecores: %s\n", nodestr)
+				w.node.StoreInNodes(nodeCores, keyID, key+"*"+val)
+				//find folder values
+				folstr := w.node.FindValueByKey(folID)
+				if folstr != "value not found" {
+					folV := strings.Split(folstr, "!")
+					ap := true
+					for _, Value := range folV {
+						if Value == key {
+							ap = false
+							break
+						}
+					}
+					if ap {
+						folV = append(folV, key)
+						folNCores := w.node.KNodesLookUp(folID)
+						w.node.StoreInNodes(folNCores, folID, strings.Join(folV, "!"))
+					}
+				} else {
+					folNCores := w.node.KNodesLookUp(folID)
+					w.node.StoreInNodes(folNCores, folID, key)
+				}
+				dataLinks := w.node.getCacheOnlyKeys()
+				c.HTML(http.StatusOK, "index.html", gin.H{
+					"Title":    "BEEP_BOOP_BM",
+					"NodeInfo": w.node.NodeCore.String(),
+					"Status":   fmt.Sprintf("Storing %s of Folder %s at %s", val, folder, strings.Join(nodeCArray, " & ")),
+					"Payload":  dataLinks,
+					"Debug":    false,
+				})
 			} else {
 				c.JSON(http.StatusOK, gin.H{
 					"insertFail": "empty key or value"})

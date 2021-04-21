@@ -2,7 +2,7 @@ package main
 
 import "time"
 
-const K = 2
+const K = 6
 const JOIN_MSG = "join"
 const LIST_MSG = "list"
 const PING_MSG = "ping"

@@ -99,5 +99,5 @@ See node names and ip addresses on network. (Network name is `kademliabookmarks_
 docker network inspect kad_net
 ```
 
-#### Jepsen Tests
+## Jepsen Tests
 https://github.com/zackteo/kademlia.bookmarks
